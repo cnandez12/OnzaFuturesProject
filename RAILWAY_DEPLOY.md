@@ -14,7 +14,7 @@ El registro mínimo anterior al envío es necesario para reconocer reintentos de
 2. Una base **PostgreSQL nueva** y exclusiva dentro del proyecto. Usar su `DATABASE_URL` privado en los servicios; no usar la base de Smart Crypto Signals.
 3. `TRADINGVIEW_API_KEY`: secreto del receptor, idéntico al campo `API Key` del indicador.
 4. `ONZA_API_KEY` y `ONZA_WEBHOOK_URL`: credenciales y destino saliente que Onza confirmó. No guardar secretos en el repositorio ni en el Pine de muestra.
-5. `DASHBOARD_TOKEN`: secreto para acceder a las APIs privadas del dashboard.
+5. El dashboard y sus APIs son públicos por decisión expresa del propietario. No configurar `DASHBOARD_TOKEN`.
 6. Bot de Telegram administrador del canal nuevo: `TELEGRAM_BOT_TOKEN` y `DESTINATION_CHANNEL_ID`. Telegram puede activarse después de verificar Onza.
 7. Valores acordados para `INITIAL_BALANCE` y `MARGIN_PER_TRADE`. La simulación registra el margen usado por cada señal nueva.
 
@@ -24,7 +24,7 @@ Crear cuatro servicios desde la **misma carpeta raíz** y una base PostgreSQL. C
 
 | Servicio | Start Command | Variables principales | Red pública |
 |---|---|---|---|
-| `onza-web` | `python setup_db.py && gunicorn app:app --bind 0.0.0.0:${PORT:-5000} --workers 2 --timeout 30` | `DATABASE_URL`, `TRADINGVIEW_API_KEY`, `DASHBOARD_TOKEN`, `INITIAL_BALANCE`, `MARGIN_PER_TRADE` | Sí |
+| `onza-web` | `python setup_db.py && gunicorn app:app --bind 0.0.0.0:${PORT:-5000} --workers 2 --timeout 30` | `DATABASE_URL`, `TRADINGVIEW_API_KEY`, `INITIAL_BALANCE`, `MARGIN_PER_TRADE` | Sí |
 | `onza-dispatch` | `python worker.py onza` | `DATABASE_URL`, `ONZA_API_KEY`, `ONZA_WEBHOOK_URL` | No |
 | `onza-process` | `python worker.py process` | `DATABASE_URL`, `INITIAL_BALANCE`, `MARGIN_PER_TRADE` | No |
 | `onza-telegram` | `python worker.py telegram` | `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, `DESTINATION_CHANNEL_ID` | No |

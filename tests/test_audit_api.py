@@ -1,4 +1,3 @@
-import importlib
 import sys
 import types
 import unittest
@@ -17,7 +16,6 @@ if "flask_cors" not in sys.modules:
 import app as receiver
 
 
-dashboard_module = importlib.import_module("dashboard.app")
 T0 = datetime(2026, 9, 28, tzinfo=timezone.utc)
 
 
@@ -56,7 +54,7 @@ class AuditApiTests(unittest.TestCase):
     def setUp(self):
         self.client = receiver.app.test_client()
 
-    def test_results_are_private_and_be_mode_uses_saved_margin(self):
+    def test_results_are_public_and_be_mode_uses_saved_margin(self):
         signal_id = "BTCUSD.P_15M_1790559000000"
         base = {"signal_id": signal_id, "exchange": "BINANCE",
                 "margin_used": Decimal("20"), "be_activated_at": T0 + timedelta(minutes=1),
@@ -71,12 +69,8 @@ class AuditApiTests(unittest.TestCase):
                 dict(base, id=3, event_type="sl", payload={"price": 98},
                      received_at=T0 + timedelta(minutes=2),
                      applied_at=T0 + timedelta(minutes=2))]
-        with patch.object(dashboard_module, "SECRET_TOKEN", "audit-secret"), \
-             patch.object(receiver, "database_connection", return_value=Connection(rows)):
-            denied = self.client.get("/api/audit/results?mode=partial_be")
-            accepted = self.client.get("/api/audit/results?mode=partial_be",
-                                       headers={"X-Dashboard-Token": "audit-secret"})
-        self.assertEqual(denied.status_code, 401)
+        with patch.object(receiver, "database_connection", return_value=Connection(rows)):
+            accepted = self.client.get("/api/audit/results?mode=partial_be")
         self.assertEqual(accepted.status_code, 200)
         self.assertEqual(accepted.json["rows"][0]["pnl_usdt"], 1.6)
         self.assertTrue(accepted.json["rows"][0]["be_activated"])

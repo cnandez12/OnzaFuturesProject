@@ -16,7 +16,7 @@ Copia independiente del motor de Señales Smart Crypto, del dashboard de futuros
 - **Con BE:** después de TP1, el 60% restante se modela con stop en entrada. `be_activated_at` representa la activación de esa regla, **no un fill**. Si llega una alerta de SL o cierre adverso tras TP1, el cálculo atribuye al remanente un BE teórico y lo marca como inferido. Un regreso a entrada entre alertas puede no detectarse, por lo que incluso un TP posterior puede sobreestimar el resultado de este escenario.
 - **TP máximo:** registra TP1, TP2 o TP3 según el máximo comunicado por TradingView, sin suponer que se vendió toda la posición a ese precio.
 
-El endpoint privado `GET /api/audit/results?mode=partial_no_be|partial_be|max_tp` calcula las tres lecturas desde los eventos aplicados. La vista incluye conteos de BE activado, inferencias y casos sin recorrido verificable. No hay datos de ejecución real, comisiones, funding, slippage, liquidaciones o gaps de Bitunix; por eso el P&L y el profit factor son **brutos teóricos**, no una certificación de rentabilidad en vivo. El JSON Pine→receptor→Onza conserva el formato existente; los nuevos campos de auditoría quedan internos en PostgreSQL.
+El endpoint público `GET /api/audit/results?mode=partial_no_be|partial_be|max_tp` calcula las tres lecturas desde los eventos aplicados. La vista incluye conteos de BE activado, inferencias y casos sin recorrido verificable. No hay datos de ejecución real, comisiones, funding, slippage, liquidaciones o gaps de Bitunix; por eso el P&L y el profit factor son **brutos teóricos**, no una certificación de rentabilidad en vivo. El JSON Pine→receptor→Onza conserva el formato existente; los nuevos campos de auditoría quedan internos en PostgreSQL.
 
 ## Estructura
 
@@ -29,7 +29,7 @@ El endpoint privado `GET /api/audit/results?mode=partial_no_be|partial_be|max_tp
 
 ## Configuración pendiente
 
-Crear una **base PostgreSQL exclusiva** y configurar en un servicio nuevo las variables de `.env.example`, incluido `DASHBOARD_TOKEN` para las APIs privadas. También hacen falta un bot administrador y el ID del canal Telegram nuevo, más el dominio público que el proveedor asigne al servicio. No hay credenciales ni sesiones activas copiadas a este proyecto. `setup_db.py` se niega a instalar el esquema si encuentra la tabla `trades` de otro proyecto.
+Crear una **base PostgreSQL exclusiva** y configurar en un servicio nuevo las variables de `.env.example`. El dashboard y sus APIs son públicos por decisión expresa del propietario; el webhook de TradingView mantiene su propia API key. También hacen falta un bot administrador y el ID del canal Telegram nuevo, más el dominio público que el proveedor asigne al servicio. No hay credenciales ni sesiones activas copiadas a este proyecto. `setup_db.py` se niega a instalar el esquema si encuentra la tabla `trades` de otro proyecto.
 
 La API key del campo Pine debe coincidir con `TRADINGVIEW_API_KEY`. El valor por defecto del campo en esta copia del Pine está **vacío** para no duplicar credenciales en archivos. `ONZA_API_KEY` es la clave que el servidor agrega al JSON enviado a Onza; conviene que sea distinta y que nunca se escriba en Pine. El destino saliente predeterminado es `https://api.onza.tech/api/v1/webhooks/signal?source=TradingView`; se puede fijar por `ONZA_WEBHOOK_URL`.
 

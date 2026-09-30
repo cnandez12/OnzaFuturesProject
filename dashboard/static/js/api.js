@@ -3,21 +3,8 @@
    ─ Fetches from backend, populates global stores, triggers renderAll.
 ════════════════════════════════════════════════════════════════════════════ */
 
-let tokenPrompt = null;
 async function fetchJson(path) {
-  const requestData = () => fetch(path, {
-    headers: sessionStorage.getItem('dashboardToken')
-      ? { 'X-Dashboard-Token': sessionStorage.getItem('dashboardToken') } : {}
-  });
-  let r = await requestData();
-  if (r.status === 401) {
-    if (!tokenPrompt) tokenPrompt = Promise.resolve().then(() => window.prompt('Token del dashboard:'));
-    const token = await tokenPrompt;
-    tokenPrompt = null;
-    if (!token) throw new Error('Acceso no autorizado');
-    sessionStorage.setItem('dashboardToken', token);
-    r = await requestData();
-  }
+  const r = await fetch(path);
   if (!r.ok) throw new Error('HTTP ' + r.status + ' en ' + path);
   return r.json();
 }

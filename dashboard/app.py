@@ -1,5 +1,4 @@
 import os
-import hmac
 import time
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -26,7 +25,6 @@ INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "1000"))
 MARGIN_PER_TRADE = float(os.getenv("MARGIN_PER_TRADE", "20"))
 LEVERAGE        = int(os.getenv("LEVERAGE", "20"))
 DASHBOARD_TITLE = "Onza Futures | Señales de TradingView"
-SECRET_TOKEN    = os.getenv("DASHBOARD_TOKEN", "")
 
 db_pool = None
 
@@ -162,13 +160,12 @@ def rows_to_list(rows):
     return result
 
 
-# ── Auth opcional ─────────────────────────────────────────────────────────────
+# ── Dashboard público ────────────────────────────────────────────────────────
 
 def check_auth():
-    if not SECRET_TOKEN:
-        return False
-    token = request.headers.get("X-Dashboard-Token", "")
-    return hmac.compare_digest(token, SECRET_TOKEN)
+    # Dashboard de auditoría público por decisión expresa del propietario.
+    # El receptor de TradingView valida su propia TRADINGVIEW_API_KEY.
+    return True
 
 
 # ── Rutas HTML ────────────────────────────────────────────────────────────────
