@@ -64,6 +64,9 @@
     <button class="nav-tab" data-page="chart" onclick="goTo('chart',this)" title="Gráfico de mercado">
       <span class="tab-icon" aria-hidden="true">╋</span><span class="tab-label">Gráfico</span>
     </button>
+    <button class="nav-tab" data-page="audit" onclick="goTo('audit',this)" title="Auditoría de escenarios">
+      <span class="tab-icon" aria-hidden="true">▦</span><span class="tab-label">Auditoría</span>
+    </button>
     <button class="nav-more" id="nav-more" type="button" onclick="toggleMoreMenu()" aria-expanded="false" aria-controls="nav-more-menu" title="Más secciones">
       <span class="tab-icon" aria-hidden="true">⋯</span><span class="tab-label">Más</span>
     </button>
@@ -372,8 +375,8 @@
       <div class="sim-config-row"><span class="sim-config-key">Apalancamiento</span><span class="sim-config-val">×{{ leverage }}</span></div>
       <div class="sim-config-row"><span class="sim-config-key">Notional / trade</span><span class="sim-config-val">${{ margin * leverage if margin and leverage else "?" }}</span></div>
       <hr class="sim-divider" style="margin:8px 0">
-      <div class="sim-config-row"><span class="sim-config-key">Dist. TPs</span><span class="sim-config-val">40% — 40% — 20%</span></div>
-      <div class="sim-config-row"><span class="sim-config-key">Breakeven</span><span class="sim-config-val">Según estado registrado por el bot</span></div>
+      <div class="sim-config-row"><span class="sim-config-key">Dist. TPs</span><span class="sim-config-val">Configurable arriba; valor inicial 40% — 40% — 20%</span></div>
+      <div class="sim-config-row"><span class="sim-config-key">Breakeven</span><span class="sim-config-val">Este simulador no aplica BE; compara el modo con BE en Auditoría</span></div>
     </div>
   </details>
 
@@ -611,7 +614,7 @@
 <section id="pg-audit" class="page" style="padding:20px;">
   <header class="mission-head">
     <div>
-      <div class="mission-eyebrow">AUDITORÍA PRIVADA · EVENTOS DE TRADINGVIEW</div>
+      <div class="mission-eyebrow">AUDITORÍA DE ESCENARIOS · EVENTOS DE TRADINGVIEW</div>
       <h1>Escenarios de <span class="gradient-text">salida</span></h1>
       <p>La misma señal en tres lecturas. TP1/TP2/TP3 cierran 40/40/20 en los dos modos de parciales.</p>
     </div>
