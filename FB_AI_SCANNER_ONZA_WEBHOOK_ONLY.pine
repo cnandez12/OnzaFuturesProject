@@ -1,0 +1,1407 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+
+//@version=5
+indicator("FB AI SCANNER + ONZA FUTURES | RELAY v1", overlay=true, max_lines_count=500, max_labels_count=500, max_boxes_count=350, max_bars_back=5000)
+
+// --------------------------------------------------------------------------------------------------------------------
+// INPUTS VISIBLES PARA EL USUARIO
+// --------------------------------------------------------------------------------------------------------------------
+
+var g_leverage = '⚡ Configuración de Futuros'
+leverage = input.int(20, "Apalancamiento", minval=1, maxval=125, group=g_leverage, tooltip="Apalancamiento a utilizar en el trade")
+riskPercent = input.float(2.0, "Riesgo por Trade (%)", minval=0.1, maxval=5.0, step=0.1, group=g_leverage, tooltip="Porcentaje del capital a arriesgar por operación")
+accountSize = input.float(1000.0, "Tamaño de Cuenta ($)", minval=100, group=g_leverage, tooltip="Capital total disponible para trading")
+
+var g_risk = '🛡️ Gestión de Stop Loss'
+atrMultiplier = input.float(1.8, "ATR Multiplier", minval=1.0, maxval=5.0, step=0.1, group=g_risk, tooltip="Multiplicador del ATR para calcular Stop Loss (menor = SL más ajustado)")
+
+var g_targets = '🎯 Take Profits'
+useTP1 = input.bool(true, "Activar TP1", group=g_targets, inline="tp1")
+multTP1 = input.float(0.5, "TP1 Multiplicador", minval=0.3, maxval=2.0, step=0.1, group=g_targets, inline="tp1")
+useTP2 = input.bool(true, "Activar TP2", group=g_targets, inline="tp2")
+multTP2 = input.float(1.5, "TP2 Multiplicador", minval=0.5, maxval=3.0, step=0.1, group=g_targets, inline="tp2")
+useTP3 = input.bool(true, "Activar TP3", group=g_targets, inline="tp3")
+multTP3 = input.float(3.0, "TP3 Multiplicador", minval=1.0, maxval=5.0, step=0.1, group=g_targets, inline="tp3")
+
+var g_filters = '🔍 Filtros de Señal'
+useVolumeFilter = input.bool(true, "Activar Filtro de Volumen", group=g_filters, tooltip="Solo genera señales cuando el volumen supera 120% del promedio")
+volumeMA = input.int(20, "Período MA de Volumen", minval=5, maxval=100, group=g_filters)
+useTimeFilter = input.bool(false, "Activar Filtro de Horarios", group=g_filters)
+startHour = input.int(0, "Hora Inicio (UTC)", minval=0, maxval=23, group=g_filters)
+endHour = input.int(23, "Hora Fin (UTC)", minval=0, maxval=23, group=g_filters)
+
+var g_panel = '📊 Panel Estadístico'
+showPanel = input.bool(true, "Mostrar Panel", group=g_panel)
+panelExpanded = input.bool(true, "Panel Expandido por Defecto", group=g_panel)
+
+var g_realtime = '📈 P&L en Tiempo Real'
+showRealtimePnL = input.bool(true, "Mostrar P&L en Tiempo Real", group=g_realtime, tooltip="Muestra el rendimiento actual de la posición activa cerca del precio")
+
+var g_close_labels = '🔄 Etiquetas de Cierre'
+showCloseLabels = input.bool(true, "Mostrar Etiquetas de Cierre de Señal", group=g_close_labels, tooltip="Muestra labels rosados cuando se cierra una señal por cambio de dirección")
+
+var g_visual = '🎨 Estilo Visual'
+showZoneBackground = input.bool(true, "Mostrar Zonas con Fondo", group=g_visual, tooltip="Muestra zonas de color para TPs (verde) y SL (rojo)")
+
+var g_alerts = '🔔 Configuración de Alertas'
+sendCloseAlerts = input.bool(true, "Enviar Alertas de Cierre por Señal Opuesta", group=g_alerts, tooltip="Envía alertas cuando una posición se cierra por cambio de tendencia")
+
+var g_webhook = '🌐 Webhook JSON (API)'
+useWebhookJSON = input.bool(true, "Activar Webhook JSON", group=g_webhook, tooltip="Envía las señales en formato JSON al endpoint configurado en TradingView")
+webhookApiKey = input.string("", "API Key", group=g_webhook, tooltip="API Key para autenticación con el endpoint")
+sendWebhookTP = input.bool(true, "Enviar TP Alcanzados vía Webhook", group=g_webhook, tooltip="Envía notificación JSON cuando se alcanza un Take Profit")
+sendWebhookSL = input.bool(true, "Enviar SL Alcanzado vía Webhook", group=g_webhook, tooltip="Envía notificación JSON cuando se alcanza el Stop Loss")
+sendWebhookClose = input.bool(true, "Enviar Cierre de Señal vía Webhook", group=g_webhook, tooltip="Envía notificación JSON cuando una señal se cierra por cambio de dirección")
+
+// El contrato Onza de este proyecto requiere los tres TP, en orden.
+if barstate.isfirst and useWebhookJSON
+    if not (useTP1 and useTP2 and useTP3)
+        runtime.error("Webhook Onza: TP1, TP2 y TP3 deben estar activos.")
+    if not (multTP1 < multTP2 and multTP2 < multTP3)
+        runtime.error("Webhook Onza: los multiplicadores deben cumplir TP1 < TP2 < TP3.")
+
+// --------------------------------------------------------------------------------------------------------------------
+// CONFIGURACIÓN INTERNA
+// --------------------------------------------------------------------------------------------------------------------
+
+showSignals = true
+strategy_type = "Normal"
+sensitivity = 5.0
+consSignalsFilter = true
+StrongSignalsOnly = true
+enableTpSlAreas = true
+tpLabels = true
+green1 = #00ffbb
+red1 = #ff1100
+
+color GREEN_PROFIT = #00E676
+color GREEN_DARK = #00C853
+color GREEN_BG = #1B5E20
+color RED_LOSS = #FF5252
+color RED_DARK = #D32F2F
+color RED_BG = #B71C1C
+color GOLD_TP = #FFD700
+
+// --------------------------------------------------------------------------------------------------------------------
+// FUNCIONES
+// --------------------------------------------------------------------------------------------------------------------
+
+supertrend(src, factor, atrLen) =>
+    atrValue = ta.atr(atrLen)
+    upperBand = src + factor * atrValue
+    lowerBand = src - factor * atrValue
+    prevLowerBand = nz(lowerBand[1])
+    prevUpperBand = nz(upperBand[1])
+    lowerBand := lowerBand > prevLowerBand or close[1] < prevLowerBand ? lowerBand : prevLowerBand
+    upperBand := upperBand < prevUpperBand or close[1] > prevUpperBand ? upperBand : prevUpperBand
+    int direction = na
+    float superTrend = na
+    prevSuperTrend = superTrend[1]
+    if prevSuperTrend == prevUpperBand
+        direction := close > upperBand ? 1 : -1
+    else
+        direction := close < lowerBand ? -1 : 1
+    superTrend := direction == 1 ? lowerBand : direction == -1 ? upperBand : na
+    [superTrend, direction]
+
+calcPercentage(target_price, entry_price) =>
+    ((target_price - entry_price) / entry_price) * 100
+
+calcPositionSize(entry, stop, risk_pct, lev, account) =>
+    risk_amount = account * (risk_pct / 100)
+    stop_distance = math.abs(entry - stop)
+    stop_percent = (stop_distance / entry) * 100
+    position_size = (risk_amount / stop_percent) * lev
+    position_size
+
+calcROI(profit_percent, lev) =>
+    profit_percent * lev
+
+formatTimeframe() =>
+    string tf = timeframe.period
+    string result = ""
+    if timeframe.isseconds
+        result := tf + "S"
+    else if timeframe.isminutes
+        int mins = int(str.tonumber(tf))
+        if mins >= 60
+            int hours = mins / 60
+            result := str.tostring(hours) + "H"
+        else
+            result := tf + "M"
+    else if timeframe.isdaily
+        result := tf == "1" ? "D" : tf + "D"
+    else if timeframe.isweekly
+        result := tf == "1" ? "W" : tf + "W"
+    else if timeframe.ismonthly
+        result := tf == "1" ? "MN" : tf + "MN"
+    else
+        result := tf
+    result
+
+formatPrice(price) =>
+    str.tostring(math.round_to_mintick(price))
+
+// === FUNCIONES JSON WEBHOOK ===
+
+onzaSymbol() =>
+    string ticker = syminfo.ticker
+    string symbol = ticker
+    if str.endswith(ticker, "USDT.P")
+        symbol := str.substring(ticker, 0, str.length(ticker) - 6) + "USD.P"
+    else if str.endswith(ticker, "USDT")
+        symbol := str.substring(ticker, 0, str.length(ticker) - 4) + "USD.P"
+    else if str.endswith(ticker, "USD")
+        symbol := ticker + ".P"
+    symbol
+
+onzaROI(direction, entryPrice, eventPrice) =>
+    float ep = math.round_to_mintick(entryPrice)
+    float ev = math.round_to_mintick(eventPrice)
+    (direction == "LONG" ? ev - ep : ep - ev) / ep * 100 * leverage
+
+generateSignalId() =>
+    string sid = onzaSymbol() + "_" + formatTimeframe() + "_" + str.tostring(time)
+    sid
+
+buildEntryJSON(direction, entryPrice, slPrice, slRoi, tp1Price, tp1Roi, tp2Price, tp2Roi, tp3Price, tp3Roi, lev, signalId) =>
+    string json = '{'
+    json += '"signalId":"' + signalId + '",'
+    json += '"typeSignal":"entry",'
+    json += '"symbol":"' + onzaSymbol() + '",'
+    json += '"sourceExchange":"' + syminfo.prefix + '",'
+    json += '"direction":"' + direction + '",'
+    json += '"entry":' + str.tostring(entryPrice, format.mintick) + ','
+    json += '"leverage":' + str.tostring(lev) + ','
+    json += '"stopLoss":{"price":' + str.tostring(slPrice, format.mintick) + ',"roi":' + str.tostring(slRoi, "0.00") + '},'
+    json += '"takeProfits":['
+    bool needsComma = false
+    if useTP1
+        json += '{"price":' + str.tostring(tp1Price, format.mintick) + ',"roi":' + str.tostring(tp1Roi, "0.00") + '}'
+        needsComma := true
+    if useTP2
+        json += (needsComma ? ',' : '') + '{"price":' + str.tostring(tp2Price, format.mintick) + ',"roi":' + str.tostring(tp2Roi, "0.00") + '}'
+        needsComma := true
+    if useTP3
+        json += (needsComma ? ',' : '') + '{"price":' + str.tostring(tp3Price, format.mintick) + ',"roi":' + str.tostring(tp3Roi, "0.00") + '}'
+    json += '],'
+    json += '"timeframe":"' + formatTimeframe() + '",'
+    json += '"message":"ONZA AI CRYPTOFUTURES",'
+    json += '"apiKey":"' + webhookApiKey + '"'
+    json += '}'
+    json
+
+buildEventJSON(typeSignal, direction, entryPrice, eventPrice, roi, lev, signalId) =>
+    string json = '{'
+    json += '"signalId":"' + signalId + '",'
+    json += '"typeSignal":"' + typeSignal + '",'
+    json += '"symbol":"' + onzaSymbol() + '",'
+    json += '"sourceExchange":"' + syminfo.prefix + '",'
+    json += '"direction":"' + direction + '",'
+    json += '"entry":' + str.tostring(entryPrice, format.mintick) + ','
+    json += '"price":' + str.tostring(eventPrice, format.mintick) + ','
+    json += '"roi":' + str.tostring(roi, "0.00") + ','
+    json += '"leverage":' + str.tostring(lev) + ','
+    json += '"timeframe":"' + formatTimeframe() + '",'
+    json += '"message":"ONZA AI CRYPTOFUTURES",'
+    json += '"apiKey":"' + webhookApiKey + '"'
+    json += '}'
+    json
+
+// --------------------------------------------------------------------------------------------------------------------
+// CÁLCULOS PRINCIPALES
+// --------------------------------------------------------------------------------------------------------------------
+
+atr14 = ta.atr(14)
+ema150 = ta.ema(close, 150)
+ema250 = ta.ema(close, 250)
+[_, _, macd] = ta.macd(close, 12, 26, 9)
+[supertrendValue, supertrendDir] = supertrend(ohlc4, sensitivity, 10)
+[_, _, adx] = ta.dmi(14, 14)
+
+consFilter = adx > 20
+StrongFilter = ta.ema(close, 200)
+none = close > 0
+
+vol_ma = ta.sma(volume, volumeMA)
+volumeFilter = volume > vol_ma * 1.2
+
+currentHour = hour(time, "UTC")
+timeFilter = currentHour >= startHour and currentHour <= endHour
+
+bull = ta.crossover(close, supertrendValue) and
+       (StrongSignalsOnly ? close > StrongFilter : none) and
+       (consSignalsFilter ? consFilter : none) and
+       (useVolumeFilter ? volumeFilter : true) and
+       (useTimeFilter ? timeFilter : true)
+
+bear = ta.crossunder(close, supertrendValue) and
+       (StrongSignalsOnly ? close < StrongFilter : none) and
+       (consSignalsFilter ? consFilter : none) and
+       (useVolumeFilter ? volumeFilter : true) and
+       (useTimeFilter ? timeFilter : true)
+
+countBull = ta.barssince(bull)
+countBear = ta.barssince(bear)
+trigger = nz(countBull, bar_index) < nz(countBear, bar_index) ? 1 : 0
+
+atrBand = atr14 * atrMultiplier
+atrStop = trigger ? low - atrBand : high + atrBand
+lastTrade(src) => ta.valuewhen(bull or bear, src, 0)
+entry_y = lastTrade(close)
+stop_y = lastTrade(atrStop)
+tp1_y = (entry_y - lastTrade(atrStop)) * multTP1 + entry_y
+tp2_y = (entry_y - lastTrade(atrStop)) * multTP2 + entry_y
+tp3_y = (entry_y - lastTrade(atrStop)) * multTP3 + entry_y
+
+position_size = calcPositionSize(entry_y, stop_y, riskPercent, leverage, accountSize)
+isHighConviction = close > StrongFilter and trigger == 1 or close < StrongFilter and trigger == 0
+tfFormatted = formatTimeframe()
+
+// --------------------------------------------------------------------------------------------------------------------
+// ► FIX 1: Variables para congelar las zonas cuando se cierra la señal
+// long_zone_right / short_zone_right se fijan al bar_index del cierre
+// y se resetean a na cuando arranca una nueva señal
+// --------------------------------------------------------------------------------------------------------------------
+
+var int long_zone_right  = na
+var int short_zone_right = na
+
+// --------------------------------------------------------------------------------------------------------------------
+// LABELS Y LÍNEAS CON ZONAS DE FONDO DINÁMICAS
+// --------------------------------------------------------------------------------------------------------------------
+
+var box profitZone1 = na
+var box profitZone2 = na
+var box profitZone3 = na
+var box lossZone = na
+
+var line entryLine = na
+var line slLine = na
+var line tp1Line = na
+var line tp2Line = na
+var line tp3Line = na
+
+var label entryLabel = na
+var label slLabel = na
+var label tp1Label = na
+var label tp2Label = na
+var label tp3Label = na
+
+if enableTpSlAreas
+    box.delete(profitZone1[1])
+    box.delete(profitZone2[1])
+    box.delete(profitZone3[1])
+    box.delete(lossZone[1])
+    line.delete(entryLine[1])
+    line.delete(slLine[1])
+    line.delete(tp1Line[1])
+    line.delete(tp2Line[1])
+    line.delete(tp3Line[1])
+    label.delete(entryLabel[1])
+    label.delete(slLabel[1])
+    label.delete(tp1Label[1])
+    label.delete(tp2Label[1])
+    label.delete(tp3Label[1])
+
+startBar = bar_index - (trigger ? countBull : countBear)
+
+// ► FIX 1: endBar se congela al bar donde cerró la señal; si sigue abierta, sigue extendiendo
+int endBar = na
+if trigger == 1
+    endBar := na(long_zone_right) ? bar_index + 8 : long_zone_right
+else
+    endBar := na(short_zone_right) ? bar_index + 8 : short_zone_right
+
+if enableTpSlAreas
+    if showZoneBackground
+        lossZone := box.new(startBar, entry_y, endBar, stop_y, border_color=color.new(RED_LOSS, 70), border_width=1, bgcolor=color.new(RED_LOSS, 92))
+
+        float firstTP = na
+        float secondTP = na
+        float thirdTP = na
+
+        if useTP1 and multTP1 != 0
+            firstTP := tp1_y
+        if useTP2 and multTP2 != 0
+            secondTP := na(firstTP) ? tp2_y : tp2_y
+        if useTP3 and multTP3 != 0
+            thirdTP := tp3_y
+
+        if not na(firstTP) and useTP1 and multTP1 != 0
+            profitZone1 := box.new(startBar, entry_y, endBar, tp1_y, border_color=color.new(GREEN_PROFIT, 70), border_width=0, bgcolor=color.new(GREEN_PROFIT, 93))
+        else if not na(secondTP) and useTP2 and multTP2 != 0 and (not useTP1 or multTP1 == 0)
+            profitZone1 := box.new(startBar, entry_y, endBar, tp2_y, border_color=color.new(GREEN_PROFIT, 70), border_width=0, bgcolor=color.new(GREEN_PROFIT, 93))
+        else if not na(thirdTP) and useTP3 and multTP3 != 0 and (not useTP1 or multTP1 == 0) and (not useTP2 or multTP2 == 0)
+            profitZone1 := box.new(startBar, entry_y, endBar, tp3_y, border_color=color.new(GREEN_PROFIT, 70), border_width=0, bgcolor=color.new(GREEN_PROFIT, 93))
+
+        if useTP1 and multTP1 != 0 and useTP2 and multTP2 != 0
+            profitZone2 := box.new(startBar, tp1_y, endBar, tp2_y, border_color=color.new(GREEN_PROFIT, 60), border_width=0, bgcolor=color.new(GREEN_PROFIT, 90))
+        else if useTP1 and multTP1 != 0 and useTP3 and multTP3 != 0 and (not useTP2 or multTP2 == 0)
+            profitZone2 := box.new(startBar, tp1_y, endBar, tp3_y, border_color=color.new(GREEN_PROFIT, 60), border_width=0, bgcolor=color.new(GREEN_PROFIT, 90))
+        else if useTP2 and multTP2 != 0 and useTP3 and multTP3 != 0 and (not useTP1 or multTP1 == 0)
+            profitZone2 := box.new(startBar, tp2_y, endBar, tp3_y, border_color=color.new(GREEN_PROFIT, 60), border_width=0, bgcolor=color.new(GREEN_PROFIT, 90))
+
+        if useTP1 and multTP1 != 0 and useTP2 and multTP2 != 0 and useTP3 and multTP3 != 0
+            profitZone3 := box.new(startBar, tp2_y, endBar, tp3_y, border_color=color.new(GREEN_PROFIT, 50), border_width=0, bgcolor=color.new(GREEN_PROFIT, 87))
+
+    entryLine := line.new(startBar, entry_y, endBar, entry_y, xloc.bar_index, extend.none, color.white, line.style_solid, 1)
+    slLine    := line.new(startBar, stop_y,  endBar, stop_y,  xloc.bar_index, extend.none, RED_LOSS,    line.style_solid, 1)
+
+    if useTP1 and multTP1 != 0
+        tp1Line := line.new(startBar, tp1_y, endBar, tp1_y, xloc.bar_index, extend.none, GREEN_PROFIT, line.style_dashed, 1)
+    if useTP2 and multTP2 != 0
+        tp2Line := line.new(startBar, tp2_y, endBar, tp2_y, xloc.bar_index, extend.none, GREEN_PROFIT, line.style_dashed, 1)
+    if useTP3 and multTP3 != 0
+        tp3Line := line.new(startBar, tp3_y, endBar, tp3_y, xloc.bar_index, extend.none, GOLD_TP,      line.style_dashed, 1)
+
+    float sl_percent = math.abs(calcPercentage(stop_y, entry_y))
+    float sl_roi     = calcROI(sl_percent, leverage)
+    float tp1_percent = calcPercentage(tp1_y, entry_y)
+    float tp1_roi     = calcROI(tp1_percent, leverage)
+    float tp2_percent = calcPercentage(tp2_y, entry_y)
+    float tp2_roi     = calcROI(tp2_percent, leverage)
+    float tp3_percent = calcPercentage(tp3_y, entry_y)
+    float tp3_roi     = calcROI(tp3_percent, leverage)
+
+    entryLabel := label.new(endBar + 1, entry_y, "▶ ENTRY   " + formatPrice(entry_y), xloc.bar_index, yloc.price, color.new(color.white, 10), label.style_label_left, color.black, size.normal)
+    slLabel    := label.new(endBar + 1, stop_y,  "✖ SL   "   + formatPrice(stop_y),  xloc.bar_index, yloc.price, color.new(RED_LOSS, 10),    label.style_label_left, color.white, size.normal)
+
+    if useTP1 and multTP1 != 0
+        tp1Label := label.new(endBar + 1, tp1_y, "◉ TP1   " + formatPrice(tp1_y), xloc.bar_index, yloc.price, color.new(GREEN_PROFIT, 10), label.style_label_left, color.black, size.normal)
+    if useTP2 and multTP2 != 0
+        tp2Label := label.new(endBar + 1, tp2_y, "◉ TP2   " + formatPrice(tp2_y), xloc.bar_index, yloc.price, color.new(GREEN_PROFIT, 10), label.style_label_left, color.black, size.normal)
+    if useTP3 and multTP3 != 0
+        tp3Label := label.new(endBar + 1, tp3_y, "★ TP3   " + formatPrice(tp3_y), xloc.bar_index, yloc.price, color.new(GOLD_TP, 0),        label.style_label_left, color.black, size.large)
+
+// SEÑALES DE ENTRADA
+buy  = showSignals and bull ? label.new(bar_index, low,  isHighConviction ? "LONG\n⚡ HQ"  : "LONG",  xloc.bar_index, yloc.belowbar, isHighConviction ? #00ff00 : #00ffbb, label.style_label_up,   color.rgb(0,0,0), isHighConviction ? size.normal : size.small) : na
+sell = showSignals and bear ? label.new(bar_index, high, isHighConviction ? "SHORT\n⚡ HQ" : "SHORT", xloc.bar_index, yloc.abovebar, isHighConviction ? #ff0000 : #ff1100, label.style_label_down, color.rgb(0,0,0), isHighConviction ? size.normal : size.small) : na
+
+// --------------------------------------------------------------------------------------------------------------------
+// SISTEMA DE TRACKING
+// --------------------------------------------------------------------------------------------------------------------
+
+distancia_y   = math.abs(entry_y - stop_y)
+tp1_y_long    = entry_y + distancia_y * multTP1
+tp2_y_long    = entry_y + distancia_y * multTP2
+tp3_y_long    = entry_y + distancia_y * multTP3
+tp1_y_short   = entry_y - distancia_y * multTP1
+tp2_y_short   = entry_y - distancia_y * multTP2
+tp3_y_short   = entry_y - distancia_y * multTP3
+
+var bool tp1_long_hit        = false
+var bool tp2_long_hit        = false
+var bool tp3_long_hit        = false
+var bool sl_long_hit         = false
+var bool signal_closed_long  = false
+
+var bool tp1_short_hit       = false
+var bool tp2_short_hit       = false
+var bool tp3_short_hit       = false
+var bool sl_short_hit        = false
+var bool signal_closed_short = false
+
+var int  total_signals       = 0
+var int  winning_signals     = 0
+var int  losing_signals      = 0
+var float total_percent_won  = 0.0
+var float total_percent_lost = 0.0
+var float total_roi_won      = 0.0
+var float total_roi_lost     = 0.0
+var float stored_entry       = 0.0
+var float stored_stop        = 0.0
+var float stored_tp1_long    = 0.0
+var float stored_tp2_long    = 0.0
+var float stored_tp3_long    = 0.0
+var float stored_tp1_short   = 0.0
+var float stored_tp2_short   = 0.0
+var float stored_tp3_short   = 0.0
+var int   last_signal_type   = 0
+var int   signal_id          = 0
+var string current_signal_id = ""
+
+var float last_tp_roi_long   = 0.0
+var float last_tp_roi_short  = 0.0
+var string current_signalId  = ""
+
+risk_amount_per_trade = accountSize * (riskPercent / 100)
+var float account_balance    = accountSize
+var float peak_balance       = accountSize
+var float max_drawdown_pct   = 0.0
+var float max_drawdown_usd   = 0.0
+var int   first_signal_time  = 0
+
+// ── FIX BUG 3: tp1_count/tp2_count/tp3_count declarados aquí ─────────────────
+// Se incrementarán SOLO en los bloques de cierre (bull/bear barstate.isconfirmed)
+// NO en los bloques de tracking real-time
+// ─────────────────────────────────────────────────────────────────────────────
+var int tp1_count = 0
+var int tp2_count = 0
+var int tp3_count = 0
+var int sl_count  = 0
+
+// Estado exclusivo del webhook. No altera el tracking, las zonas ni el panel.
+var int wh_start_bar = na
+varip bool wh_tp1_sent = false
+varip bool wh_tp2_sent = false
+varip bool wh_tp3_sent = false
+varip bool wh_sl_sent = false
+varip bool wh_terminal = false
+varip float wh_last_tp_roi = 0.0
+
+// Se ejecuta antes de que la señal nueva sustituya los niveles guardados.
+// Si una vela histórica contiene SL y TP, se prioriza el SL por prudencia.
+if useWebhookJSON and last_signal_type != 0 and not na(wh_start_bar) and bar_index > wh_start_bar and not wh_terminal
+    string wh_dir = last_signal_type == 1 ? "LONG" : "SHORT"
+    bool wh_stop_touched = last_signal_type == 1 ? low <= stored_stop : high >= stored_stop
+    bool wh_tp1_touched = last_signal_type == 1 ? high >= stored_tp1_long : low <= stored_tp1_short
+    bool wh_tp2_touched = last_signal_type == 1 ? high >= stored_tp2_long : low <= stored_tp2_short
+    bool wh_tp3_touched = last_signal_type == 1 ? high >= stored_tp3_long : low <= stored_tp3_short
+    if wh_stop_touched and not wh_sl_sent
+        if sendWebhookSL
+            alert(buildEventJSON("sl", wh_dir, stored_entry, stored_stop, onzaROI(wh_dir, stored_entry, stored_stop), leverage, current_signalId), alert.freq_all)
+        wh_sl_sent := true
+        wh_terminal := true
+    if not wh_terminal and useTP1 and wh_tp1_touched and not wh_tp1_sent
+        float wh_tp1_price = last_signal_type == 1 ? stored_tp1_long : stored_tp1_short
+        wh_last_tp_roi := onzaROI(wh_dir, stored_entry, wh_tp1_price)
+        if sendWebhookTP
+            alert(buildEventJSON("tp1", wh_dir, stored_entry, wh_tp1_price, wh_last_tp_roi, leverage, current_signalId), alert.freq_all)
+        wh_tp1_sent := true
+        if not useTP2 and not useTP3
+            wh_terminal := true
+    if not wh_terminal and useTP2 and wh_tp2_touched and not wh_tp2_sent
+        float wh_tp2_price = last_signal_type == 1 ? stored_tp2_long : stored_tp2_short
+        wh_last_tp_roi := onzaROI(wh_dir, stored_entry, wh_tp2_price)
+        if sendWebhookTP
+            alert(buildEventJSON("tp2", wh_dir, stored_entry, wh_tp2_price, wh_last_tp_roi, leverage, current_signalId), alert.freq_all)
+        wh_tp2_sent := true
+        if not useTP3
+            wh_terminal := true
+    if not wh_terminal and useTP3 and wh_tp3_touched and not wh_tp3_sent
+        float wh_tp3_price = last_signal_type == 1 ? stored_tp3_long : stored_tp3_short
+        wh_last_tp_roi := onzaROI(wh_dir, stored_entry, wh_tp3_price)
+        if sendWebhookTP
+            alert(buildEventJSON("tp3", wh_dir, stored_entry, wh_tp3_price, wh_last_tp_roi, leverage, current_signalId), alert.freq_all)
+        wh_tp3_sent := true
+        wh_terminal := true
+
+// --------------------------------------------------------------------------------------------------------------------
+// LÓGICA DE CIERRE DE SEÑAL
+// --------------------------------------------------------------------------------------------------------------------
+
+if bull and barstate.isconfirmed
+    if useWebhookJSON and last_signal_type != 0 and not wh_terminal and sendCloseAlerts and sendWebhookClose
+        string wh_old_dir = last_signal_type == 1 ? "LONG" : "SHORT"
+        float wh_floating_roi = onzaROI(wh_old_dir, stored_entry, close)
+        float wh_close_roi = wh_last_tp_roi > 0 ? math.max(wh_last_tp_roi, wh_floating_roi) : wh_floating_roi
+        alert(buildEventJSON("close", wh_old_dir, stored_entry, close, wh_close_roi, leverage, current_signalId), alert.freq_all)
+    wh_start_bar := bar_index
+    wh_tp1_sent := false
+    wh_tp2_sent := false
+    wh_tp3_sent := false
+    wh_sl_sent := false
+    wh_terminal := false
+    wh_last_tp_roi := 0.0
+    if last_signal_type == 1
+        if tp1_long_hit or tp2_long_hit or tp3_long_hit
+            winning_signals += 1
+            // ── FIX BUG 3: contadores TP al cierre ───────────────────────────
+            if tp1_long_hit
+                tp1_count += 1
+            if tp2_long_hit
+                tp2_count += 1
+            if tp3_long_hit
+                tp3_count += 1
+            // ─────────────────────────────────────────────────────────────────
+            if tp3_long_hit and useTP3
+                profit_pct = math.abs(calcPercentage(stored_tp3_long, stored_entry))
+                total_percent_won += profit_pct
+                roi_profit = calcROI(profit_pct, leverage)
+                total_roi_won += roi_profit
+                profit_usd = risk_amount_per_trade * (roi_profit / 100)
+                account_balance += profit_usd
+            else if tp2_long_hit and useTP2
+                profit_pct = math.abs(calcPercentage(stored_tp2_long, stored_entry))
+                total_percent_won += profit_pct
+                roi_profit = calcROI(profit_pct, leverage)
+                total_roi_won += roi_profit
+                profit_usd = risk_amount_per_trade * (roi_profit / 100)
+                account_balance += profit_usd
+            else if tp1_long_hit and useTP1
+                profit_pct = math.abs(calcPercentage(stored_tp1_long, stored_entry))
+                total_percent_won += profit_pct
+                roi_profit = calcROI(profit_pct, leverage)
+                total_roi_won += roi_profit
+                profit_usd = risk_amount_per_trade * (roi_profit / 100)
+                account_balance += profit_usd
+        else if sl_long_hit
+            losing_signals += 1
+            loss_pct = math.abs(calcPercentage(stored_stop, stored_entry))
+            total_percent_lost += loss_pct
+            roi_loss = calcROI(loss_pct, leverage)
+            total_roi_lost += roi_loss
+            loss_usd = risk_amount_per_trade * (roi_loss / 100)
+            account_balance -= loss_usd
+        else
+            floating_pnl_pct = calcPercentage(close[1], stored_entry)
+            floating_roi = calcROI(floating_pnl_pct, leverage)
+            float final_roi = last_tp_roi_long > 0 ? math.max(last_tp_roi_long, floating_roi) : floating_roi
+            if showCloseLabels
+                string close_text = ""
+                color close_color = color.new(#FF1493, 0)
+                if final_roi > 0
+                    close_text := "Close Signal +" + str.tostring(final_roi, "#.##") + "% ROI"
+                else if final_roi < 0
+                    close_text := "Close Signal " + str.tostring(final_roi, "#.##") + "% ROI"
+                else
+                    close_text := "Close Signal 0.00% ROI"
+                line.new(bar_index - 2, close, bar_index, close, xloc.bar_index, extend.none, close_color, line.style_solid, 2)
+                label.new(bar_index - 3, close, close_text, xloc.bar_index, yloc.price, close_color, label.style_label_right, color.white, size.small, text.align_right)
+            if sendCloseAlerts and not useWebhookJSON
+                string signSymbol = final_roi > 0 ? "+" : ""
+                alert("🔄 SEÑAL CERRADA\n━━━━━━━━━━━━━━━━━━━━━━━━\n📊 " + syminfo.ticker + " | " + tfFormatted + " | LONG\n💰 Resultado: " + signSymbol + str.tostring(final_roi, "#.##") + "% ROI\n📍 Precio de Cierre: " + formatPrice(close[1]) + "\n📝 Motivo: Nueva señal SHORT\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ FB AI CRYPTOFUTURES SCANNER", alert.freq_once_per_bar_close)
+            if final_roi > 0
+                winning_signals += 1
+                total_percent_won += math.abs(floating_pnl_pct)
+                total_roi_won += math.abs(final_roi)
+                profit_usd = risk_amount_per_trade * (math.abs(final_roi) / 100)
+                account_balance += profit_usd
+            else if final_roi < 0
+                losing_signals += 1
+                total_percent_lost += math.abs(floating_pnl_pct)
+                total_roi_lost += math.abs(final_roi)
+                loss_usd = risk_amount_per_trade * (math.abs(final_roi) / 100)
+                account_balance -= loss_usd
+
+    else if last_signal_type == -1
+        if tp1_short_hit or tp2_short_hit or tp3_short_hit
+            winning_signals += 1
+            // ── FIX BUG 3: contadores TP al cierre ───────────────────────────
+            if tp1_short_hit
+                tp1_count += 1
+            if tp2_short_hit
+                tp2_count += 1
+            if tp3_short_hit
+                tp3_count += 1
+            // ─────────────────────────────────────────────────────────────────
+            if tp3_short_hit and useTP3
+                profit_pct = math.abs(calcPercentage(stored_tp3_short, stored_entry))
+                total_percent_won += profit_pct
+                roi_profit = calcROI(profit_pct, leverage)
+                total_roi_won += roi_profit
+                profit_usd = risk_amount_per_trade * (roi_profit / 100)
+                account_balance += profit_usd
+            else if tp2_short_hit and useTP2
+                profit_pct = math.abs(calcPercentage(stored_tp2_short, stored_entry))
+                total_percent_won += profit_pct
+                roi_profit = calcROI(profit_pct, leverage)
+                total_roi_won += roi_profit
+                profit_usd = risk_amount_per_trade * (roi_profit / 100)
+                account_balance += profit_usd
+            else if tp1_short_hit and useTP1
+                profit_pct = math.abs(calcPercentage(stored_tp1_short, stored_entry))
+                total_percent_won += profit_pct
+                roi_profit = calcROI(profit_pct, leverage)
+                total_roi_won += roi_profit
+                profit_usd = risk_amount_per_trade * (roi_profit / 100)
+                account_balance += profit_usd
+        else if sl_short_hit
+            losing_signals += 1
+            loss_pct = math.abs(calcPercentage(stored_stop, stored_entry))
+            total_percent_lost += loss_pct
+            roi_loss = calcROI(loss_pct, leverage)
+            total_roi_lost += roi_loss
+            loss_usd = risk_amount_per_trade * (roi_loss / 100)
+            account_balance -= loss_usd
+        else
+            floating_pnl_pct = calcPercentage(stored_entry, close[1])
+            floating_roi = calcROI(floating_pnl_pct, leverage)
+            float final_roi = last_tp_roi_short > 0 ? math.max(last_tp_roi_short, floating_roi) : floating_roi
+            if showCloseLabels
+                string close_text = ""
+                color close_color = color.new(#FF1493, 0)
+                if final_roi > 0
+                    close_text := "Close Signal +" + str.tostring(final_roi, "#.##") + "% ROI"
+                else if final_roi < 0
+                    close_text := "Close Signal " + str.tostring(final_roi, "#.##") + "% ROI"
+                else
+                    close_text := "Close Signal 0.00% ROI"
+                line.new(bar_index - 2, close, bar_index, close, xloc.bar_index, extend.none, close_color, line.style_solid, 2)
+                label.new(bar_index - 3, close, close_text, xloc.bar_index, yloc.price, close_color, label.style_label_right, color.white, size.small, text.align_right)
+            if sendCloseAlerts and not useWebhookJSON
+                string signSymbol = final_roi > 0 ? "+" : ""
+                alert("🔄 SEÑAL CERRADA\n━━━━━━━━━━━━━━━━━━━━━━━━\n📊 " + syminfo.ticker + " | " + tfFormatted + " | SHORT\n💰 Resultado: " + signSymbol + str.tostring(final_roi, "#.##") + "% ROI\n📍 Precio de Cierre: " + formatPrice(close[1]) + "\n📝 Motivo: Nueva señal LONG\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ FB AI CRYPTOFUTURES SCANNER", alert.freq_once_per_bar_close)
+            if final_roi > 0
+                winning_signals += 1
+                total_percent_won += math.abs(floating_pnl_pct)
+                total_roi_won += math.abs(final_roi)
+                profit_usd = risk_amount_per_trade * (math.abs(final_roi) / 100)
+                account_balance += profit_usd
+            else if final_roi < 0
+                losing_signals += 1
+                total_percent_lost += math.abs(floating_pnl_pct)
+                total_roi_lost += math.abs(final_roi)
+                loss_usd = risk_amount_per_trade * (math.abs(final_roi) / 100)
+                account_balance -= loss_usd
+
+    if account_balance > peak_balance
+        peak_balance := account_balance
+    current_dd = peak_balance - account_balance
+    current_dd_pct = (current_dd / peak_balance) * 100
+    if current_dd > max_drawdown_usd
+        max_drawdown_usd := current_dd
+    if current_dd_pct > max_drawdown_pct
+        max_drawdown_pct := current_dd_pct
+    if first_signal_time == 0
+        first_signal_time := time
+
+    total_signals += 1
+    stored_entry    := entry_y
+    stored_stop     := stop_y
+    stored_tp1_long := tp1_y_long
+    stored_tp2_long := tp2_y_long
+    stored_tp3_long := tp3_y_long
+    stored_tp1_short := tp1_y_short
+    stored_tp2_short := tp2_y_short
+    stored_tp3_short := tp3_y_short
+
+    tp1_long_hit       := false
+    tp2_long_hit       := false
+    tp3_long_hit       := false
+    sl_long_hit        := false
+    signal_closed_long := false
+    last_tp_roi_long   := 0.0
+    last_signal_type   := 1
+    current_signalId   := generateSignalId()
+
+    // ► FIX 1: nueva señal LONG → resetear zona
+    long_zone_right := na
+
+if bear and barstate.isconfirmed
+    if useWebhookJSON and last_signal_type != 0 and not wh_terminal and sendCloseAlerts and sendWebhookClose
+        string wh_old_dir = last_signal_type == 1 ? "LONG" : "SHORT"
+        float wh_floating_roi = onzaROI(wh_old_dir, stored_entry, close)
+        float wh_close_roi = wh_last_tp_roi > 0 ? math.max(wh_last_tp_roi, wh_floating_roi) : wh_floating_roi
+        alert(buildEventJSON("close", wh_old_dir, stored_entry, close, wh_close_roi, leverage, current_signalId), alert.freq_all)
+    wh_start_bar := bar_index
+    wh_tp1_sent := false
+    wh_tp2_sent := false
+    wh_tp3_sent := false
+    wh_sl_sent := false
+    wh_terminal := false
+    wh_last_tp_roi := 0.0
+    if last_signal_type == 1
+        if tp1_long_hit or tp2_long_hit or tp3_long_hit
+            winning_signals += 1
+            // ── FIX BUG 3: contadores TP al cierre ───────────────────────────
+            if tp1_long_hit
+                tp1_count += 1
+            if tp2_long_hit
+                tp2_count += 1
+            if tp3_long_hit
+                tp3_count += 1
+            // ─────────────────────────────────────────────────────────────────
+            if tp3_long_hit and useTP3
+                profit_pct = math.abs(calcPercentage(stored_tp3_long, stored_entry))
+                total_percent_won += profit_pct
+                roi_profit = calcROI(profit_pct, leverage)
+                total_roi_won += roi_profit
+                profit_usd = risk_amount_per_trade * (roi_profit / 100)
+                account_balance += profit_usd
+            else if tp2_long_hit and useTP2
+                profit_pct = math.abs(calcPercentage(stored_tp2_long, stored_entry))
+                total_percent_won += profit_pct
+                roi_profit = calcROI(profit_pct, leverage)
+                total_roi_won += roi_profit
+                profit_usd = risk_amount_per_trade * (roi_profit / 100)
+                account_balance += profit_usd
+            else if tp1_long_hit and useTP1
+                profit_pct = math.abs(calcPercentage(stored_tp1_long, stored_entry))
+                total_percent_won += profit_pct
+                roi_profit = calcROI(profit_pct, leverage)
+                total_roi_won += roi_profit
+                profit_usd = risk_amount_per_trade * (roi_profit / 100)
+                account_balance += profit_usd
+        else if sl_long_hit
+            losing_signals += 1
+            loss_pct = math.abs(calcPercentage(stored_stop, stored_entry))
+            total_percent_lost += loss_pct
+            roi_loss = calcROI(loss_pct, leverage)
+            total_roi_lost += roi_loss
+            loss_usd = risk_amount_per_trade * (roi_loss / 100)
+            account_balance -= loss_usd
+        else
+            floating_pnl_pct = calcPercentage(close[1], stored_entry)
+            floating_roi = calcROI(floating_pnl_pct, leverage)
+            float final_roi = last_tp_roi_long > 0 ? math.max(last_tp_roi_long, floating_roi) : floating_roi
+            if showCloseLabels
+                string close_text = ""
+                color close_color = color.new(#FF1493, 0)
+                if final_roi > 0
+                    close_text := "Close Signal +" + str.tostring(final_roi, "#.##") + "% ROI"
+                else if final_roi < 0
+                    close_text := "Close Signal " + str.tostring(final_roi, "#.##") + "% ROI"
+                else
+                    close_text := "Close Signal 0.00% ROI"
+                line.new(bar_index - 2, close, bar_index, close, xloc.bar_index, extend.none, close_color, line.style_solid, 2)
+                label.new(bar_index - 3, close, close_text, xloc.bar_index, yloc.price, close_color, label.style_label_right, color.white, size.small, text.align_right)
+            if sendCloseAlerts and not useWebhookJSON
+                string signSymbol = final_roi > 0 ? "+" : ""
+                alert("🔄 SEÑAL CERRADA\n━━━━━━━━━━━━━━━━━━━━━━━━\n📊 " + syminfo.ticker + " | " + tfFormatted + " | LONG\n💰 Resultado: " + signSymbol + str.tostring(final_roi, "#.##") + "% ROI\n📍 Precio de Cierre: " + formatPrice(close[1]) + "\n📝 Motivo: Nueva señal SHORT\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ FB AI CRYPTOFUTURES SCANNER", alert.freq_once_per_bar_close)
+            if final_roi > 0
+                winning_signals += 1
+                total_percent_won += math.abs(floating_pnl_pct)
+                total_roi_won += math.abs(final_roi)
+                profit_usd = risk_amount_per_trade * (math.abs(final_roi) / 100)
+                account_balance += profit_usd
+            else if final_roi < 0
+                losing_signals += 1
+                total_percent_lost += math.abs(floating_pnl_pct)
+                total_roi_lost += math.abs(final_roi)
+                loss_usd = risk_amount_per_trade * (math.abs(final_roi) / 100)
+                account_balance -= loss_usd
+
+    else if last_signal_type == -1
+        if tp1_short_hit or tp2_short_hit or tp3_short_hit
+            winning_signals += 1
+            // ── FIX BUG 3: contadores TP al cierre ───────────────────────────
+            if tp1_short_hit
+                tp1_count += 1
+            if tp2_short_hit
+                tp2_count += 1
+            if tp3_short_hit
+                tp3_count += 1
+            // ─────────────────────────────────────────────────────────────────
+            if tp3_short_hit and useTP3
+                profit_pct = math.abs(calcPercentage(stored_tp3_short, stored_entry))
+                total_percent_won += profit_pct
+                roi_profit = calcROI(profit_pct, leverage)
+                total_roi_won += roi_profit
+                profit_usd = risk_amount_per_trade * (roi_profit / 100)
+                account_balance += profit_usd
+            else if tp2_short_hit and useTP2
+                profit_pct = math.abs(calcPercentage(stored_tp2_short, stored_entry))
+                total_percent_won += profit_pct
+                roi_profit = calcROI(profit_pct, leverage)
+                total_roi_won += roi_profit
+                profit_usd = risk_amount_per_trade * (roi_profit / 100)
+                account_balance += profit_usd
+            else if tp1_short_hit and useTP1
+                profit_pct = math.abs(calcPercentage(stored_tp1_short, stored_entry))
+                total_percent_won += profit_pct
+                roi_profit = calcROI(profit_pct, leverage)
+                total_roi_won += roi_profit
+                profit_usd = risk_amount_per_trade * (roi_profit / 100)
+                account_balance += profit_usd
+        else if sl_short_hit
+            losing_signals += 1
+            loss_pct = math.abs(calcPercentage(stored_stop, stored_entry))
+            total_percent_lost += loss_pct
+            roi_loss = calcROI(loss_pct, leverage)
+            total_roi_lost += roi_loss
+            loss_usd = risk_amount_per_trade * (roi_loss / 100)
+            account_balance -= loss_usd
+        else
+            floating_pnl_pct = calcPercentage(stored_entry, close[1])
+            floating_roi = calcROI(floating_pnl_pct, leverage)
+            float final_roi = last_tp_roi_short > 0 ? math.max(last_tp_roi_short, floating_roi) : floating_roi
+            if showCloseLabels
+                string close_text = ""
+                color close_color = color.new(#FF1493, 0)
+                if final_roi > 0
+                    close_text := "Close Signal +" + str.tostring(final_roi, "#.##") + "% ROI"
+                else if final_roi < 0
+                    close_text := "Close Signal " + str.tostring(final_roi, "#.##") + "% ROI"
+                else
+                    close_text := "Close Signal 0.00% ROI"
+                line.new(bar_index - 2, close, bar_index, close, xloc.bar_index, extend.none, close_color, line.style_solid, 2)
+                label.new(bar_index - 3, close, close_text, xloc.bar_index, yloc.price, close_color, label.style_label_right, color.white, size.small, text.align_right)
+            if sendCloseAlerts and not useWebhookJSON
+                string signSymbol = final_roi > 0 ? "+" : ""
+                alert("🔄 SEÑAL CERRADA\n━━━━━━━━━━━━━━━━━━━━━━━━\n📊 " + syminfo.ticker + " | " + tfFormatted + " | SHORT\n💰 Resultado: " + signSymbol + str.tostring(final_roi, "#.##") + "% ROI\n📍 Precio de Cierre: " + formatPrice(close[1]) + "\n📝 Motivo: Nueva señal LONG\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ FB AI CRYPTOFUTURES SCANNER", alert.freq_once_per_bar_close)
+            if final_roi > 0
+                winning_signals += 1
+                total_percent_won += math.abs(floating_pnl_pct)
+                total_roi_won += math.abs(final_roi)
+                profit_usd = risk_amount_per_trade * (math.abs(final_roi) / 100)
+                account_balance += profit_usd
+            else if final_roi < 0
+                losing_signals += 1
+                total_percent_lost += math.abs(floating_pnl_pct)
+                total_roi_lost += math.abs(final_roi)
+                loss_usd = risk_amount_per_trade * (math.abs(final_roi) / 100)
+                account_balance -= loss_usd
+
+    if account_balance > peak_balance
+        peak_balance := account_balance
+    current_dd = peak_balance - account_balance
+    current_dd_pct = (current_dd / peak_balance) * 100
+    if current_dd > max_drawdown_usd
+        max_drawdown_usd := current_dd
+    if current_dd_pct > max_drawdown_pct
+        max_drawdown_pct := current_dd_pct
+    if first_signal_time == 0
+        first_signal_time := time
+
+    total_signals += 1
+    stored_entry    := entry_y
+    stored_stop     := stop_y
+    stored_tp1_long := tp1_y_long
+    stored_tp2_long := tp2_y_long
+    stored_tp3_long := tp3_y_long
+    stored_tp1_short := tp1_y_short
+    stored_tp2_short := tp2_y_short
+    stored_tp3_short := tp3_y_short
+
+    tp1_short_hit        := false
+    tp2_short_hit        := false
+    tp3_short_hit        := false
+    sl_short_hit         := false
+    signal_closed_short  := false
+    last_tp_roi_short    := 0.0
+    last_signal_type     := -1
+    current_signalId     := generateSignalId()
+
+    // ► FIX 1: nueva señal SHORT → resetear zona
+    short_zone_right := na
+
+// --------------------------------------------------------------------------------------------------------------------
+// ► FIX 2: DETECCIÓN DE TPs Y SL
+//   Se agrega countBull > 0 / countBear > 0 para ignorar la vela de la señal misma
+// --------------------------------------------------------------------------------------------------------------------
+
+if trigger == 1 and not signal_closed_long
+    // SL LONG — ► FIX 2: countBull > 0
+    if not sl_long_hit and countBull > 0 and low <= stop_y and countBull < 200 and not tp1_long_hit and not tp2_long_hit and not tp3_long_hit
+        loss_pct = math.abs(calcPercentage(stop_y, stored_entry))
+        roi_loss = calcROI(loss_pct, leverage)
+        display_text = "SL -" + str.tostring(roi_loss, "#.##") + "% ROI"
+        line.new(bar_index - 2, stop_y, bar_index, stop_y, xloc.bar_index, extend.none, color.new(#2196F3, 0), line.style_solid, 2)
+        label.new(bar_index - 3, stop_y, display_text, xloc.bar_index, yloc.price, color.new(#2196F3, 0), label.style_label_right, color.white, size.small, text.align_right)
+        sl_long_hit        := true
+        signal_closed_long := true
+        sl_count += 1
+        // ► FIX 1: congelar zona
+        if na(long_zone_right)
+            long_zone_right := bar_index
+
+    if (tp1_long_hit or tp2_long_hit or tp3_long_hit) and low <= stop_y and not signal_closed_long
+        signal_closed_long := true
+        if na(long_zone_right)
+            long_zone_right := bar_index
+
+    // TP1 LONG — ► FIX 2: countBull > 0
+    if useTP1 and not tp1_long_hit and not signal_closed_long and countBull > 0 and high >= tp1_y_long and countBull < 200
+        profit_pct = calcPercentage(tp1_y_long, stored_entry)
+        roi_profit = calcROI(profit_pct, leverage)
+        display_text = "TP1 +" + str.tostring(roi_profit, "#.##") + "% ROI"
+        line.new(bar_index - 2, tp1_y_long, bar_index, tp1_y_long, xloc.bar_index, extend.none, color.new(#ffeb3b, 0), line.style_solid, 2)
+        label.new(bar_index - 3, tp1_y_long, display_text, xloc.bar_index, yloc.price, color.new(#ffeb3b, 0), label.style_label_right, color.black, size.small, text.align_right)
+        tp1_long_hit      := true
+        last_tp_roi_long  := roi_profit
+        // ── tp1_count removido de aquí — ahora se incrementa al cierre ───────
+        bool is_final_tp1 = not useTP2 and not useTP3
+        if is_final_tp1
+            signal_closed_long := true
+            if na(long_zone_right)
+                long_zone_right := bar_index
+
+    // TP2 LONG — ► FIX 2: countBull > 0
+    if useTP2 and not tp2_long_hit and not signal_closed_long and countBull > 0 and high >= tp2_y_long and countBull < 200
+        profit_pct = calcPercentage(tp2_y_long, stored_entry)
+        roi_profit = calcROI(profit_pct, leverage)
+        display_text = "TP2 +" + str.tostring(roi_profit, "#.##") + "% ROI"
+        line.new(bar_index - 2, tp2_y_long, bar_index, tp2_y_long, xloc.bar_index, extend.none, color.new(#ffeb3b, 0), line.style_solid, 2)
+        label.new(bar_index - 3, tp2_y_long, display_text, xloc.bar_index, yloc.price, color.new(#ffeb3b, 0), label.style_label_right, color.black, size.small, text.align_right)
+        tp2_long_hit      := true
+        last_tp_roi_long  := roi_profit
+        // ── tp2_count removido de aquí — ahora se incrementa al cierre ───────
+        bool is_final_tp2 = not useTP3
+        if is_final_tp2
+            signal_closed_long := true
+            if na(long_zone_right)
+                long_zone_right := bar_index
+
+    // TP3 LONG — ► FIX 2: countBull > 0
+    if useTP3 and not tp3_long_hit and not signal_closed_long and countBull > 0 and high >= tp3_y_long and countBull < 200
+        profit_pct = calcPercentage(tp3_y_long, stored_entry)
+        roi_profit = calcROI(profit_pct, leverage)
+        display_text = "TP3 +" + str.tostring(roi_profit, "#.##") + "% ROI"
+        line.new(bar_index - 2, tp3_y_long, bar_index, tp3_y_long, xloc.bar_index, extend.none, color.new(#ffeb3b, 0), line.style_solid, 2)
+        label.new(bar_index - 3, tp3_y_long, display_text, xloc.bar_index, yloc.price, color.new(#ffeb3b, 0), label.style_label_right, color.black, size.small, text.align_right)
+        tp3_long_hit       := true
+        last_tp_roi_long   := roi_profit
+        // ── tp3_count removido de aquí — ahora se incrementa al cierre ───────
+        signal_closed_long := true
+        // ► FIX 1: congelar zona al llegar al último TP
+        if na(long_zone_right)
+            long_zone_right := bar_index
+
+if trigger == 0 and not signal_closed_short
+    // SL SHORT — ► FIX 2: countBear > 0
+    if not sl_short_hit and countBear > 0 and high >= stop_y and countBear < 200 and not tp1_short_hit and not tp2_short_hit and not tp3_short_hit
+        loss_pct = math.abs(calcPercentage(stop_y, stored_entry))
+        roi_loss = calcROI(loss_pct, leverage)
+        display_text = "SL -" + str.tostring(roi_loss, "#.##") + "% ROI"
+        line.new(bar_index - 2, stop_y, bar_index, stop_y, xloc.bar_index, extend.none, color.new(#2196F3, 0), line.style_solid, 2)
+        label.new(bar_index - 3, stop_y, display_text, xloc.bar_index, yloc.price, color.new(#2196F3, 0), label.style_label_right, color.white, size.small, text.align_right)
+        sl_short_hit         := true
+        signal_closed_short  := true
+        sl_count += 1
+        if na(short_zone_right)
+            short_zone_right := bar_index
+
+    if (tp1_short_hit or tp2_short_hit or tp3_short_hit) and high >= stop_y and not signal_closed_short
+        signal_closed_short := true
+        if na(short_zone_right)
+            short_zone_right := bar_index
+
+    // TP1 SHORT — ► FIX 2: countBear > 0
+    if useTP1 and not tp1_short_hit and not signal_closed_short and countBear > 0 and low <= tp1_y_short and countBear < 200
+        profit_pct = math.abs(calcPercentage(tp1_y_short, stored_entry))
+        roi_profit = calcROI(profit_pct, leverage)
+        display_text = "TP1 +" + str.tostring(roi_profit, "#.##") + "% ROI"
+        line.new(bar_index - 2, tp1_y_short, bar_index, tp1_y_short, xloc.bar_index, extend.none, color.new(#ffeb3b, 0), line.style_solid, 2)
+        label.new(bar_index - 3, tp1_y_short, display_text, xloc.bar_index, yloc.price, color.new(#ffeb3b, 0), label.style_label_right, color.black, size.small, text.align_right)
+        tp1_short_hit     := true
+        last_tp_roi_short := roi_profit
+        // ── tp1_count removido de aquí — ahora se incrementa al cierre ───────
+        bool is_final_tp1 = not useTP2 and not useTP3
+        if is_final_tp1
+            signal_closed_short := true
+            if na(short_zone_right)
+                short_zone_right := bar_index
+
+    // TP2 SHORT — ► FIX 2: countBear > 0
+    if useTP2 and not tp2_short_hit and not signal_closed_short and countBear > 0 and low <= tp2_y_short and countBear < 200
+        profit_pct = math.abs(calcPercentage(tp2_y_short, stored_entry))
+        roi_profit = calcROI(profit_pct, leverage)
+        display_text = "TP2 +" + str.tostring(roi_profit, "#.##") + "% ROI"
+        line.new(bar_index - 2, tp2_y_short, bar_index, tp2_y_short, xloc.bar_index, extend.none, color.new(#ffeb3b, 0), line.style_solid, 2)
+        label.new(bar_index - 3, tp2_y_short, display_text, xloc.bar_index, yloc.price, color.new(#ffeb3b, 0), label.style_label_right, color.black, size.small, text.align_right)
+        tp2_short_hit     := true
+        last_tp_roi_short := roi_profit
+        // ── tp2_count removido de aquí — ahora se incrementa al cierre ───────
+        bool is_final_tp2 = not useTP3
+        if is_final_tp2
+            signal_closed_short := true
+            if na(short_zone_right)
+                short_zone_right := bar_index
+
+    // TP3 SHORT — ► FIX 2: countBear > 0
+    if useTP3 and not tp3_short_hit and not signal_closed_short and countBear > 0 and low <= tp3_y_short and countBear < 200
+        profit_pct = math.abs(calcPercentage(tp3_y_short, stored_entry))
+        roi_profit = calcROI(profit_pct, leverage)
+        display_text = "TP3 +" + str.tostring(roi_profit, "#.##") + "% ROI"
+        line.new(bar_index - 2, tp3_y_short, bar_index, tp3_y_short, xloc.bar_index, extend.none, color.new(#ffeb3b, 0), line.style_solid, 2)
+        label.new(bar_index - 3, tp3_y_short, display_text, xloc.bar_index, yloc.price, color.new(#ffeb3b, 0), label.style_label_right, color.black, size.small, text.align_right)
+        tp3_short_hit        := true
+        last_tp_roi_short    := roi_profit
+        // ── tp3_count removido de aquí — ahora se incrementa al cierre ───────
+        signal_closed_short  := true
+        if na(short_zone_right)
+            short_zone_right := bar_index
+
+// --------------------------------------------------------------------------------------------------------------------
+// P&L EN TIEMPO REAL
+// --------------------------------------------------------------------------------------------------------------------
+
+var label realtime_pnl_label = na
+
+if showRealtimePnL and barstate.islast
+    if not na(realtime_pnl_label)
+        label.delete(realtime_pnl_label)
+
+    if last_signal_type != 0 and stored_entry != 0
+        float current_pnl_pct = 0.0
+        float current_roi     = 0.0
+        color label_color     = color.gray
+        string label_text     = ""
+        bool show_label       = false
+
+        if last_signal_type == 1
+            if not signal_closed_long
+                current_pnl_pct := calcPercentage(close, stored_entry)
+                current_roi     := calcROI(current_pnl_pct, leverage)
+                bool below_last_tp = false
+                if tp1_long_hit and close <= stored_tp1_long
+                    below_last_tp := true
+                else if tp2_long_hit and close <= stored_tp2_long
+                    below_last_tp := true
+                else if tp3_long_hit and close <= stored_tp3_long
+                    below_last_tp := true
+                if not below_last_tp
+                    show_label := true
+                    if current_pnl_pct > 0
+                        label_color := color.new(#00E676, 10)
+                        label_text  := "📈 +" + str.tostring(current_roi, "#.##") + "%"
+                    else if current_pnl_pct < 0
+                        label_color := color.new(#FF5252, 10)
+                        label_text  := "📉 " + str.tostring(current_roi, "#.##") + "%"
+                    else
+                        label_color := color.new(#FFD740, 10)
+                        label_text  := "➡️ 0.00%"
+
+        else if last_signal_type == -1
+            if not signal_closed_short
+                current_pnl_pct := calcPercentage(stored_entry, close)
+                current_roi     := calcROI(current_pnl_pct, leverage)
+                bool below_last_tp = false
+                if tp1_short_hit and close >= stored_tp1_short
+                    below_last_tp := true
+                else if tp2_short_hit and close >= stored_tp2_short
+                    below_last_tp := true
+                else if tp3_short_hit and close >= stored_tp3_short
+                    below_last_tp := true
+                if not below_last_tp
+                    show_label := true
+                    if current_pnl_pct > 0
+                        label_color := color.new(#00E676, 10)
+                        label_text  := "📈 +" + str.tostring(current_roi, "#.##") + "%"
+                    else if current_pnl_pct < 0
+                        label_color := color.new(#FF5252, 10)
+                        label_text  := "📉 " + str.tostring(current_roi, "#.##") + "%"
+                    else
+                        label_color := color.new(#FFD740, 10)
+                        label_text  := "➡️ 0.00%"
+
+        if show_label and label_text != ""
+            realtime_pnl_label := label.new(x=bar_index + 3, y=close, text=label_text, xloc=xloc.bar_index, yloc=yloc.price, color=label_color, style=label.style_label_left, textcolor=color.black, size=size.small, textalign=text.align_left)
+
+// --------------------------------------------------------------------------------------------------------------------
+// ALERTAS
+// --------------------------------------------------------------------------------------------------------------------
+
+var bool tp1_alerted = false
+var bool tp2_alerted = false
+var bool tp3_alerted = false
+var bool sl_alerted  = false
+
+if bull and barstate.isconfirmed
+    sl_roi = calcROI(math.abs(calcPercentage(stop_y, entry_y)), leverage)
+    if useWebhookJSON
+        float _tp1_roi_json = useTP1 ? onzaROI("LONG", entry_y, tp1_y) : 0.0
+        float _tp2_roi_json = useTP2 ? onzaROI("LONG", entry_y, tp2_y) : 0.0
+        float _tp3_roi_json = useTP3 ? onzaROI("LONG", entry_y, tp3_y) : 0.0
+        string jsonPayload = buildEntryJSON("LONG", entry_y, stop_y, onzaROI("LONG", entry_y, stop_y), tp1_y, _tp1_roi_json, tp2_y, _tp2_roi_json, tp3_y, _tp3_roi_json, leverage, current_signalId)
+        alert(jsonPayload, alert.freq_all)
+    else
+        tpText = ""
+        if useTP1
+            tp1_roi = calcROI(calcPercentage(tp1_y, entry_y), leverage)
+            tpText := tpText + "\n🎯 TP1: " + formatPrice(tp1_y) + " (+" + str.tostring(tp1_roi, "#.##") + "% ROI)"
+        if useTP2
+            tp2_roi = calcROI(calcPercentage(tp2_y, entry_y), leverage)
+            tpText := tpText + "\n🎯 TP2: " + formatPrice(tp2_y) + " (+" + str.tostring(tp2_roi, "#.##") + "% ROI)"
+        if useTP3
+            tp3_roi = calcROI(calcPercentage(tp3_y, entry_y), leverage)
+            tpText := tpText + "\n🎯 TP3: " + formatPrice(tp3_y) + " (+" + str.tostring(tp3_roi, "#.##") + "% ROI)"
+        alert("🚀 NUEVA SEÑAL LONG\n━━━━━━━━━━━━━━━━━━━━━━━━\n📊 " + syminfo.ticker + " | " + tfFormatted + " | " + str.tostring(leverage) + "x\n📍 Entrada: " + formatPrice(entry_y) + "\n🛑 Stop Loss: " + formatPrice(stop_y) + " (−" + str.tostring(sl_roi, "#.##") + "% ROI)" + tpText + "\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ FB AI CRYPTOFUTURES SCANNER", alert.freq_once_per_bar_close)
+    tp1_alerted := false
+    tp2_alerted := false
+    tp3_alerted := false
+    sl_alerted  := false
+
+if bear and barstate.isconfirmed
+    sl_roi = calcROI(math.abs(calcPercentage(stop_y, entry_y)), leverage)
+    if useWebhookJSON
+        float _tp1_roi_json = useTP1 ? onzaROI("SHORT", entry_y, tp1_y) : 0.0
+        float _tp2_roi_json = useTP2 ? onzaROI("SHORT", entry_y, tp2_y) : 0.0
+        float _tp3_roi_json = useTP3 ? onzaROI("SHORT", entry_y, tp3_y) : 0.0
+        string jsonPayload = buildEntryJSON("SHORT", entry_y, stop_y, onzaROI("SHORT", entry_y, stop_y), tp1_y, _tp1_roi_json, tp2_y, _tp2_roi_json, tp3_y, _tp3_roi_json, leverage, current_signalId)
+        alert(jsonPayload, alert.freq_all)
+    else
+        tpText = ""
+        if useTP1
+            tp1_roi = calcROI(math.abs(calcPercentage(tp1_y, entry_y)), leverage)
+            tpText := tpText + "\n🎯 TP1: " + formatPrice(tp1_y) + " (+" + str.tostring(tp1_roi, "#.##") + "% ROI)"
+        if useTP2
+            tp2_roi = calcROI(math.abs(calcPercentage(tp2_y, entry_y)), leverage)
+            tpText := tpText + "\n🎯 TP2: " + formatPrice(tp2_y) + " (+" + str.tostring(tp2_roi, "#.##") + "% ROI)"
+        if useTP3
+            tp3_roi = calcROI(math.abs(calcPercentage(tp3_y, entry_y)), leverage)
+            tpText := tpText + "\n🎯 TP3: " + formatPrice(tp3_y) + " (+" + str.tostring(tp3_roi, "#.##") + "% ROI)"
+        alert("📉 NUEVA SEÑAL SHORT\n━━━━━━━━━━━━━━━━━━━━━━━━\n📊 " + syminfo.ticker + " | " + tfFormatted + " | " + str.tostring(leverage) + "x\n📍 Entrada: " + formatPrice(entry_y) + "\n🛑 Stop Loss: " + formatPrice(stop_y) + " (−" + str.tostring(sl_roi, "#.##") + "% ROI)" + tpText + "\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ FB AI CRYPTOFUTURES SCANNER", alert.freq_once_per_bar_close)
+    tp1_alerted := false
+    tp2_alerted := false
+    tp3_alerted := false
+    sl_alerted  := false
+
+// === ALERTAS TP/SL LONG ===
+if not useWebhookJSON and trigger == 1 and not signal_closed_long
+    if useTP1 and tp1_long_hit and not tp1_alerted and not signal_closed_long
+        profit_pct = calcPercentage(tp1_y_long, stored_entry)
+        roi_profit = calcROI(profit_pct, leverage)
+        if useWebhookJSON and sendWebhookTP
+            alert(buildEventJSON("tp1", "LONG", stored_entry, tp1_y_long, roi_profit, leverage, current_signalId), alert.freq_once_per_bar)
+        else if not useWebhookJSON
+            alert("✅ TP1 ALCANZADO\n━━━━━━━━━━━━━━━━━━━━━━━━\n📊 " + syminfo.ticker + " | " + tfFormatted + " | LONG\n💰 Ganancia: +" + str.tostring(roi_profit, "#.##") + "% ROI\n📍 Precio: " + formatPrice(tp1_y_long) + "\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ FB AI CRYPTOFUTURES SCANNER", alert.freq_once_per_bar)
+        tp1_alerted := true
+    if useTP2 and tp2_long_hit and not tp2_alerted and not signal_closed_long
+        profit_pct = calcPercentage(tp2_y_long, stored_entry)
+        roi_profit = calcROI(profit_pct, leverage)
+        if useWebhookJSON and sendWebhookTP
+            alert(buildEventJSON("tp2", "LONG", stored_entry, tp2_y_long, roi_profit, leverage, current_signalId), alert.freq_once_per_bar)
+        else if not useWebhookJSON
+            alert("✅ TP2 ALCANZADO\n━━━━━━━━━━━━━━━━━━━━━━━━\n📊 " + syminfo.ticker + " | " + tfFormatted + " | LONG\n💰 Ganancia: +" + str.tostring(roi_profit, "#.##") + "% ROI\n📍 Precio: " + formatPrice(tp2_y_long) + "\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ FB AI CRYPTOFUTURES SCANNER", alert.freq_once_per_bar)
+        tp2_alerted := true
+    if useTP3 and tp3_long_hit and not tp3_alerted and not signal_closed_long
+        profit_pct = calcPercentage(tp3_y_long, stored_entry)
+        roi_profit = calcROI(profit_pct, leverage)
+        if useWebhookJSON and sendWebhookTP
+            alert(buildEventJSON("tp3", "LONG", stored_entry, tp3_y_long, roi_profit, leverage, current_signalId), alert.freq_once_per_bar)
+        else if not useWebhookJSON
+            alert("🏆 TP3 ALCANZADO\n━━━━━━━━━━━━━━━━━━━━━━━━\n📊 " + syminfo.ticker + " | " + tfFormatted + " | LONG\n💰 Ganancia: +" + str.tostring(roi_profit, "#.##") + "% ROI\n📍 Precio: " + formatPrice(tp3_y_long) + "\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ FB AI CRYPTOFUTURES SCANNER", alert.freq_once_per_bar)
+        tp3_alerted := true
+    if sl_long_hit and not sl_alerted
+        loss_pct = math.abs(calcPercentage(stop_y, stored_entry))
+        roi_loss = calcROI(loss_pct, leverage)
+        if useWebhookJSON and sendWebhookSL
+            alert(buildEventJSON("sl", "LONG", stored_entry, stop_y, -roi_loss, leverage, current_signalId), alert.freq_once_per_bar)
+        else if not useWebhookJSON
+            alert("❌ STOP LOSS ALCANZADO\n━━━━━━━━━━━━━━━━━━━━━━━━\n📊 " + syminfo.ticker + " | " + tfFormatted + " | LONG\n💸 Pérdida: −" + str.tostring(roi_loss, "#.##") + "% ROI\n📍 Precio: " + formatPrice(stop_y) + "\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ FB AI CRYPTOFUTURES SCANNER", alert.freq_once_per_bar)
+        sl_alerted := true
+
+// === ALERTAS TP/SL SHORT ===
+if not useWebhookJSON and trigger == 0 and not signal_closed_short
+    if useTP1 and tp1_short_hit and not tp1_alerted and not signal_closed_short
+        profit_pct = math.abs(calcPercentage(tp1_y_short, stored_entry))
+        roi_profit = calcROI(profit_pct, leverage)
+        if useWebhookJSON and sendWebhookTP
+            alert(buildEventJSON("tp1", "SHORT", stored_entry, tp1_y_short, roi_profit, leverage, current_signalId), alert.freq_once_per_bar)
+        else if not useWebhookJSON
+            alert("✅ TP1 ALCANZADO\n━━━━━━━━━━━━━━━━━━━━━━━━\n📊 " + syminfo.ticker + " | " + tfFormatted + " | SHORT\n💰 Ganancia: +" + str.tostring(roi_profit, "#.##") + "% ROI\n📍 Precio: " + formatPrice(tp1_y_short) + "\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ FB AI CRYPTOFUTURES SCANNER", alert.freq_once_per_bar)
+        tp1_alerted := true
+    if useTP2 and tp2_short_hit and not tp2_alerted and not signal_closed_short
+        profit_pct = math.abs(calcPercentage(tp2_y_short, stored_entry))
+        roi_profit = calcROI(profit_pct, leverage)
+        if useWebhookJSON and sendWebhookTP
+            alert(buildEventJSON("tp2", "SHORT", stored_entry, tp2_y_short, roi_profit, leverage, current_signalId), alert.freq_once_per_bar)
+        else if not useWebhookJSON
+            alert("✅ TP2 ALCANZADO\n━━━━━━━━━━━━━━━━━━━━━━━━\n📊 " + syminfo.ticker + " | " + tfFormatted + " | SHORT\n💰 Ganancia: +" + str.tostring(roi_profit, "#.##") + "% ROI\n📍 Precio: " + formatPrice(tp2_y_short) + "\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ FB AI CRYPTOFUTURES SCANNER", alert.freq_once_per_bar)
+        tp2_alerted := true
+    if useTP3 and tp3_short_hit and not tp3_alerted and not signal_closed_short
+        profit_pct = math.abs(calcPercentage(tp3_y_short, stored_entry))
+        roi_profit = calcROI(profit_pct, leverage)
+        if useWebhookJSON and sendWebhookTP
+            alert(buildEventJSON("tp3", "SHORT", stored_entry, tp3_y_short, roi_profit, leverage, current_signalId), alert.freq_once_per_bar)
+        else if not useWebhookJSON
+            alert("🏆 TP3 ALCANZADO\n━━━━━━━━━━━━━━━━━━━━━━━━\n📊 " + syminfo.ticker + " | " + tfFormatted + " | SHORT\n💰 Ganancia: +" + str.tostring(roi_profit, "#.##") + "% ROI\n📍 Precio: " + formatPrice(tp3_y_short) + "\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ FB AI CRYPTOFUTURES SCANNER", alert.freq_once_per_bar)
+        tp3_alerted := true
+    if sl_short_hit and not sl_alerted
+        loss_pct = math.abs(calcPercentage(stop_y, stored_entry))
+        roi_loss = calcROI(loss_pct, leverage)
+        if useWebhookJSON and sendWebhookSL
+            alert(buildEventJSON("sl", "SHORT", stored_entry, stop_y, -roi_loss, leverage, current_signalId), alert.freq_once_per_bar)
+        else if not useWebhookJSON
+            alert("❌ STOP LOSS ALCANZADO\n━━━━━━━━━━━━━━━━━━━━━━━━\n📊 " + syminfo.ticker + " | " + tfFormatted + " | SHORT\n💸 Pérdida: −" + str.tostring(roi_loss, "#.##") + "% ROI\n📍 Precio: " + formatPrice(stop_y) + "\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ FB AI CRYPTOFUTURES SCANNER", alert.freq_once_per_bar)
+        sl_alerted := true
+
+// --------------------------------------------------------------------------------------------------------------------
+// FIX BUG 2: Variables de DISPLAY para el panel — calculadas en tiempo real cada barra
+// sin tocar las variables persistentes (winning_signals, account_balance, etc.)
+// Incluyen la señal actualmente abierta para que el panel siempre muestre datos frescos
+// --------------------------------------------------------------------------------------------------------------------
+
+int   disp_winning  = winning_signals
+int   disp_losing   = losing_signals
+float disp_roi_won  = total_roi_won
+float disp_roi_lost = total_roi_lost
+float disp_balance  = account_balance
+
+if last_signal_type == 1 and stored_entry != 0
+    if tp1_long_hit or tp2_long_hit or tp3_long_hit
+        // Señal ganadora con TP alcanzado
+        if tp3_long_hit and useTP3
+            float _p = math.abs(calcPercentage(stored_tp3_long, stored_entry))
+            float _r = calcROI(_p, leverage)
+            disp_winning  += 1
+            disp_roi_won  += _r
+            disp_balance  += risk_amount_per_trade * (_r / 100)
+        else if tp2_long_hit and useTP2
+            float _p = math.abs(calcPercentage(stored_tp2_long, stored_entry))
+            float _r = calcROI(_p, leverage)
+            disp_winning  += 1
+            disp_roi_won  += _r
+            disp_balance  += risk_amount_per_trade * (_r / 100)
+        else if tp1_long_hit and useTP1
+            float _p = math.abs(calcPercentage(stored_tp1_long, stored_entry))
+            float _r = calcROI(_p, leverage)
+            disp_winning  += 1
+            disp_roi_won  += _r
+            disp_balance  += risk_amount_per_trade * (_r / 100)
+    else if sl_long_hit
+        // SL puro
+        float _p = math.abs(calcPercentage(stored_stop, stored_entry))
+        float _r = calcROI(_p, leverage)
+        disp_losing   += 1
+        disp_roi_lost += _r
+        disp_balance  -= risk_amount_per_trade
+    else if not signal_closed_long
+        // Señal flotante (sin TP ni SL formales aún)
+        float _fpct = calcPercentage(close, stored_entry)
+        float _froi = calcROI(_fpct, leverage)
+        if _fpct > 0
+            disp_winning  += 1
+            disp_roi_won  += math.abs(_froi)
+            disp_balance  += risk_amount_per_trade * (math.abs(_froi) / 100)
+        else if _fpct < 0
+            disp_losing   += 1
+            disp_roi_lost += math.abs(_froi)
+            disp_balance  -= risk_amount_per_trade * (math.abs(_froi) / 100)
+
+else if last_signal_type == -1 and stored_entry != 0
+    if tp1_short_hit or tp2_short_hit or tp3_short_hit
+        // Señal ganadora con TP alcanzado
+        if tp3_short_hit and useTP3
+            float _p = math.abs(calcPercentage(stored_tp3_short, stored_entry))
+            float _r = calcROI(_p, leverage)
+            disp_winning  += 1
+            disp_roi_won  += _r
+            disp_balance  += risk_amount_per_trade * (_r / 100)
+        else if tp2_short_hit and useTP2
+            float _p = math.abs(calcPercentage(stored_tp2_short, stored_entry))
+            float _r = calcROI(_p, leverage)
+            disp_winning  += 1
+            disp_roi_won  += _r
+            disp_balance  += risk_amount_per_trade * (_r / 100)
+        else if tp1_short_hit and useTP1
+            float _p = math.abs(calcPercentage(stored_tp1_short, stored_entry))
+            float _r = calcROI(_p, leverage)
+            disp_winning  += 1
+            disp_roi_won  += _r
+            disp_balance  += risk_amount_per_trade * (_r / 100)
+    else if sl_short_hit
+        // SL puro
+        float _p = math.abs(calcPercentage(stored_stop, stored_entry))
+        float _r = calcROI(_p, leverage)
+        disp_losing   += 1
+        disp_roi_lost += _r
+        disp_balance  -= risk_amount_per_trade
+    else if not signal_closed_short
+        // Señal flotante (sin TP ni SL formales aún)
+        float _fpct = calcPercentage(stored_entry, close)
+        float _froi = calcROI(_fpct, leverage)
+        if _fpct > 0
+            disp_winning  += 1
+            disp_roi_won  += math.abs(_froi)
+            disp_balance  += risk_amount_per_trade * (math.abs(_froi) / 100)
+        else if _fpct < 0
+            disp_losing   += 1
+            disp_roi_lost += math.abs(_froi)
+            disp_balance  -= risk_amount_per_trade * (math.abs(_froi) / 100)
+
+// --------------------------------------------------------------------------------------------------------------------
+// PANEL ESTADÍSTICO
+// --------------------------------------------------------------------------------------------------------------------
+
+// ── FIX BUG 1 + FIX BUG 2: fórmulas usan variables de display ────────────────
+// win_rate denominador = señales CERRADAS (disp_winning + disp_losing)
+// todos los valores del panel usan disp_* para incluir señal activa
+int   disp_closed_count = disp_winning + disp_losing
+win_rate       = disp_closed_count > 0 ? (disp_winning / disp_closed_count) * 100 : 0.0
+net_roi        = disp_roi_won - disp_roi_lost
+avg_win        = disp_winning > 0 ? disp_roi_won / disp_winning : 0.0
+avg_loss       = disp_losing  > 0 ? disp_roi_lost / disp_losing  : 0.0
+net_profit_usd = disp_balance - accountSize
+start_date_str = first_signal_time != 0 ? str.format("{0,date,MMM dd, yyyy}", first_signal_time) : "No signals yet"
+
+if showPanel
+    int numRows = panelExpanded ? 9 : 2
+    var table statsTable = table.new(position.top_right, 8, numRows, border_width=1, border_color=color.new(#000000, 70), frame_width=2, frame_color=color.new(#FFD700, 50))
+
+    if barstate.islast
+        table.cell(statsTable, 0, 0, panelExpanded ? "▼" : "▶", text_color=color.new(#FFD700, 0), bgcolor=color.new(#000000, 10), text_size=size.small, text_halign=text.align_center)
+        table.cell(statsTable, 1, 0, "FB CRYPTOFUTURES", text_color=color.new(#FFD700, 0), bgcolor=color.new(#000000, 10), text_size=size.normal, text_halign=text.align_left)
+        table.merge_cells(statsTable, 1, 0, 5, 0)
+        table.cell(statsTable, 6, 0, str.tostring(leverage) + "x", text_color=color.new(#00E5FF, 0), bgcolor=color.new(#000000, 10), text_size=size.normal, text_halign=text.align_center)
+        table.cell(statsTable, 7, 0, tfFormatted, text_color=color.new(#757575, 0), bgcolor=color.new(#000000, 10), text_size=size.small, text_halign=text.align_center)
+
+        if panelExpanded
+            // ── FIX BUG 2: balance y colores usan disp_balance ───────────────
+            color balanceColor = disp_balance > accountSize ? color.new(#00E676, 0) : disp_balance < accountSize ? color.new(#FF5252, 0) : color.white
+            color balanceBg    = disp_balance > accountSize ? color.new(#004D40, 0) : disp_balance < accountSize ? color.new(#B71C1C, 0) : color.new(#424242, 0)
+            string balanceSign = net_profit_usd > 0 ? "+" : ""
+
+            table.cell(statsTable, 0, 1, "💼", text_color=color.new(#00E5FF, 0), bgcolor=color.new(#000000, 10), text_size=size.small, text_halign=text.align_center)
+            table.cell(statsTable, 1, 1, "Balance", text_color=color.new(#00E5FF, 0), bgcolor=color.new(#000000, 10), text_size=size.normal, text_halign=text.align_left)
+            // ── FIX BUG 2: muestra disp_balance ─────────────────────────────
+            table.cell(statsTable, 2, 1, "$" + str.tostring(disp_balance, "#.##"), text_color=balanceColor, bgcolor=balanceBg, text_size=size.large, text_halign=text.align_center)
+            table.merge_cells(statsTable, 2, 1, 4, 1)
+            table.cell(statsTable, 5, 1, balanceSign + "$" + str.tostring(net_profit_usd, "#.##"), text_color=balanceColor, bgcolor=color.new(#263238, 0), text_size=size.small, text_halign=text.align_center)
+            table.merge_cells(statsTable, 5, 1, 7, 1)
+
+            table.cell(statsTable, 0, 2, "⚠️", text_color=color.new(#FF9800, 0), bgcolor=color.new(#1a1a1a, 20), text_size=size.small, text_halign=text.align_center)
+            table.cell(statsTable, 1, 2, "Max DD", text_color=color.new(#FF9800, 0), bgcolor=color.new(#1a1a1a, 20), text_size=size.small, text_halign=text.align_left)
+            table.cell(statsTable, 2, 2, str.tostring(max_drawdown_pct, "#.##") + "%", text_color=color.new(#FF5252, 0), bgcolor=color.new(#B71C1C, 30), text_size=size.normal, text_halign=text.align_center)
+            table.cell(statsTable, 3, 2, "(-$" + str.tostring(max_drawdown_usd, "#.##") + ")", text_color=color.new(#FF5252, 0), bgcolor=color.new(#263238, 0), text_size=size.tiny, text_halign=text.align_center)
+            table.merge_cells(statsTable, 3, 2, 4, 2)
+            table.cell(statsTable, 5, 2, "📅", text_color=color.new(#64B5F6, 0), bgcolor=color.new(#1a1a1a, 20), text_size=size.small, text_halign=text.align_center)
+            table.cell(statsTable, 6, 2, start_date_str, text_color=color.new(#64B5F6, 0), bgcolor=color.new(#263238, 0), text_size=size.tiny, text_halign=text.align_center)
+            table.merge_cells(statsTable, 6, 2, 7, 2)
+
+            table.cell(statsTable, 0, 3, "📊", text_color=color.new(#FFD700, 0), bgcolor=color.new(#1a1a1a, 20), text_size=size.small, text_halign=text.align_center)
+            table.cell(statsTable, 1, 3, str.tostring(total_signals) + " Signals", text_color=color.white, bgcolor=color.new(#263238, 0), text_size=size.normal, text_halign=text.align_left)
+            table.merge_cells(statsTable, 1, 3, 2, 3)
+            table.cell(statsTable, 3, 3, "Win Rate", text_color=color.new(#BDBDBD, 0), bgcolor=color.new(#1a1a1a, 20), text_size=size.small, text_halign=text.align_center)
+            color wrColor = win_rate >= 70 ? color.new(#00E676, 0) : win_rate >= 50 ? color.new(#FFD740, 0) : color.new(#FF5252, 0)
+            color wrBg    = win_rate >= 70 ? color.new(#1B5E20, 50) : win_rate >= 50 ? color.new(#F57F17, 50) : color.new(#B71C1C, 50)
+            table.cell(statsTable, 4, 3, str.tostring(win_rate, "#.#") + "%", text_color=wrColor, bgcolor=wrBg, text_size=size.large, text_halign=text.align_center)
+            table.merge_cells(statsTable, 4, 3, 7, 3)
+
+            int activeTPCount = 0
+            if useTP1
+                activeTPCount += 1
+            if useTP2
+                activeTPCount += 1
+            if useTP3
+                activeTPCount += 1
+            int currentCol = 0
+            if useTP1
+                table.cell(statsTable, currentCol, 4, "TP1: " + str.tostring(tp1_count), text_color=GREEN_PROFIT, bgcolor=color.new(#263238, 0), text_size=size.small, text_halign=text.align_center)
+                table.merge_cells(statsTable, currentCol, 4, currentCol + 1, 4)
+                currentCol += 2
+            if useTP2
+                table.cell(statsTable, currentCol, 4, "TP2: " + str.tostring(tp2_count), text_color=GREEN_DARK, bgcolor=color.new(#263238, 0), text_size=size.small, text_halign=text.align_center)
+                table.merge_cells(statsTable, currentCol, 4, currentCol + 1, 4)
+                currentCol += 2
+            if useTP3
+                table.cell(statsTable, currentCol, 4, "TP3: " + str.tostring(tp3_count), text_color=GOLD_TP, bgcolor=color.new(#263238, 0), text_size=size.small, text_halign=text.align_center)
+                table.merge_cells(statsTable, currentCol, 4, currentCol + 1, 4)
+                currentCol += 2
+            table.cell(statsTable, currentCol, 4, "SL: " + str.tostring(sl_count), text_color=RED_LOSS, bgcolor=color.new(#263238, 0), text_size=size.small, text_halign=text.align_center)
+            table.merge_cells(statsTable, currentCol, 4, 7, 4)
+
+            table.cell(statsTable, 0, 5, "✅", text_color=color.new(#00E676, 0), bgcolor=color.new(#1a1a1a, 20), text_size=size.small, text_halign=text.align_center)
+            // ── FIX BUG 2: muestra disp_winning / disp_losing ───────────────
+            table.cell(statsTable, 1, 5, str.tostring(disp_winning) + "W", text_color=color.new(#00E676, 0), bgcolor=color.new(#1B5E20, 30), text_size=size.normal, text_halign=text.align_center)
+            table.cell(statsTable, 2, 5, "+" + str.tostring(avg_win, "#.##") + "%", text_color=color.new(#00E676, 0), bgcolor=color.new(#1B5E20, 30), text_size=size.small, text_halign=text.align_center)
+            table.merge_cells(statsTable, 2, 5, 3, 5)
+            table.cell(statsTable, 4, 5, "❌", text_color=color.new(#FF5252, 0), bgcolor=color.new(#1a1a1a, 20), text_size=size.small, text_halign=text.align_center)
+            table.cell(statsTable, 5, 5, str.tostring(disp_losing) + "L", text_color=color.new(#FF5252, 0), bgcolor=color.new(#B71C1C, 30), text_size=size.normal, text_halign=text.align_center)
+            table.cell(statsTable, 6, 5, "-" + str.tostring(avg_loss, "#.##") + "%", text_color=color.new(#FF5252, 0), bgcolor=color.new(#B71C1C, 30), text_size=size.small, text_halign=text.align_center)
+            table.merge_cells(statsTable, 6, 5, 7, 5)
+
+            table.cell(statsTable, 0, 6, "", bgcolor=color.new(#FFD700, 10), text_size=size.tiny)
+            table.merge_cells(statsTable, 0, 6, 7, 6)
+
+            color netColor = net_roi > 0 ? color.new(#00E676, 0) : net_roi < 0 ? color.new(#FF5252, 0) : color.new(#FFD740, 0)
+            color netBg    = net_roi > 0 ? color.new(#004D40, 0) : net_roi < 0 ? color.new(#B71C1C, 0) : color.new(#424242, 0)
+            string netSign = net_roi > 0 ? "+" : ""
+            table.cell(statsTable, 0, 7, "🎯", text_color=color.new(#FFD700, 0), bgcolor=color.new(#000000, 10), text_size=size.normal, text_halign=text.align_center)
+            table.cell(statsTable, 1, 7, "NET ROI", text_color=color.new(#FFD700, 0), bgcolor=color.new(#000000, 10), text_size=size.large, text_halign=text.align_left)
+            table.cell(statsTable, 2, 7, netSign + str.tostring(net_roi, "#.##") + "%", text_color=netColor, bgcolor=netBg, text_size=size.huge, text_halign=text.align_center)
+            table.merge_cells(statsTable, 2, 7, 7, 7)
+
+        else
+            color netColor = net_roi > 0 ? color.new(#00E676, 0) : net_roi < 0 ? color.new(#FF5252, 0) : color.new(#FFD740, 0)
+            color netBg    = net_roi > 0 ? color.new(#004D40, 0) : net_roi < 0 ? color.new(#B71C1C, 0) : color.new(#424242, 0)
+            string netSign = net_roi > 0 ? "+" : ""
+            table.cell(statsTable, 0, 1, "🎯", text_color=color.new(#FFD700, 0), bgcolor=color.new(#1a1a1a, 20), text_size=size.small, text_halign=text.align_center)
+            table.cell(statsTable, 1, 1, "NET", text_color=color.new(#FFD740, 0), bgcolor=color.new(#1a1a1a, 20), text_size=size.small, text_halign=text.align_left)
+            table.cell(statsTable, 2, 1, netSign + str.tostring(net_roi, "#.##") + "%", text_color=netColor, bgcolor=netBg, text_size=size.huge, text_halign=text.align_center)
+            table.merge_cells(statsTable, 2, 1, 5, 1)
+            table.cell(statsTable, 6, 1, str.tostring(win_rate, "#") + "%", text_color=color.new(#00E5FF, 0), bgcolor=color.new(#263238, 0), text_size=size.normal, text_halign=text.align_center)
+            table.cell(statsTable, 7, 1, str.tostring(total_signals), text_color=color.new(#BDBDBD, 0), bgcolor=color.new(#263238, 0), text_size=size.small, text_halign=text.align_center)

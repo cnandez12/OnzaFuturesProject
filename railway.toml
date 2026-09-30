@@ -1,0 +1,8 @@
+[build]
+builder = "railpack"
+
+[deploy]
+# Los comandos y el healthcheck se configuran por servicio en Railway.
+# Un startCommand global arrancaría procesos duplicados en los workers.
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

@@ -1,0 +1,194 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   RESPONSIVE — TABLET  (≤ 1024px)
+══════════════════════════════════════════════════════════════════════════════ */
+@media(max-width:1024px) {
+  .kpi-grid                 { grid-template-columns: repeat(2,1fr); }
+  .grid-2,.grid-3,
+  .grid-2-3,.grid-3-2       { grid-template-columns: 1fr; }
+  .curve-stats-grid         { grid-template-columns: repeat(3,1fr); }
+  .sim-layout               { grid-template-columns: 1fr; }
+  .sim-results-col          { gap: 12px; }
+  .sim-kpi-grid             { grid-template-columns: repeat(3,1fr); }
+  .live-right               { margin-left: 0; }
+  .nav-brand-sub            { display: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   RESPONSIVE — MOBILE  (≤ 768px)
+══════════════════════════════════════════════════════════════════════════════ */
+@media(max-width:768px) {
+
+  /* ── Nav ── */
+  :root { --nav-h: 52px; }
+  .topnav                   { padding: 0 12px; gap: 0; position: relative; }
+  .nav-brand                { margin-right: 10px; }
+  .nav-brand-name           { font-size: 12px; }
+  .nav-brand-sub            { display: none; }
+  .nav-icon                 { width: 28px; height: 28px; font-size: 11px; border-radius: 8px; }
+  .nav-tabs                 { gap: 0; flex: 1; overflow-x: auto; scrollbar-width: none; }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .nav-tab                  { padding: 0 10px; font-size: 12px; }
+  .nav-tab .tab-icon        { display: none; }
+  .nav-balance              { display: none; }
+  .icon-btn                 { width: 30px; height: 30px; font-size: 13px; }
+
+  /* ── Pages ── */
+  .page                     { padding: 12px; }
+  .page-header h1           { font-size: 18px; }
+  .page-header p            { font-size: 12px; }
+
+  /* ── KPI grid ── */
+  .kpi-grid                 { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .kpi-card                 { padding: 13px 14px; }
+  .kpi-value                { font-size: 20px; }
+  .kpi-label                { font-size: 10px; margin-bottom: 5px; }
+  .kpi-sub                  { font-size: 11px; }
+  .kpi-trend                { font-size: 10px; padding: 1px 5px; }
+  .grid-3                   { grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  /* ── Cards ── */
+  .card-head                { padding: 10px 12px; flex-wrap: wrap; gap: 6px; }
+  .card-title               { font-size: 12px; }
+  .card-body                { padding: 12px; }
+  .card-footer              { padding: 8px 12px; font-size: 11px; }
+
+  /* ── Distribution bars ── */
+  .dist-label               { font-size: 11px; min-width: 50px; max-width: 40%; word-break: break-word; }
+  .dist-pct                 { display: none; }
+
+  /* ── Tables ── */
+  .tbl-wrap                 { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table                     { font-size: 12px; min-width: 0; width: 100%; }
+  th, td                    { padding: 7px 8px; }
+
+  /* ── Filters ── */
+  .filter-bar               { gap: 6px; }
+  .filter-select,
+  .filter-input             { font-size: 12px; padding: 6px 9px; height: 32px; }
+  .filter-count             { font-size: 11px; width: 100%; text-align: right; }
+
+  /* ── Live strip ── */
+  .live-strip               { padding: 10px 12px; gap: 10px; }
+  .live-strip-divider       { display: none; }
+  .live-metric-label        { font-size: 9px; }
+  .live-metric-val          { font-size: 14px; }
+  #sum-net                  { font-size: 17px !important; }
+  .live-metric-sub          { font-size: 10px; }
+
+  /* ── Open positions grid ── */
+  .pos-grid                 { grid-template-columns: 1fr; gap: 10px; }
+  .pos-card                 { padding: 13px; }
+  .pos-symbol               { font-size: 15px; }
+  .pos-pnl-net              { font-size: 17px; }
+  .pos-pnl-detail           { padding: 8px 10px; gap: 6px; flex-wrap: wrap; }
+  .pos-pnl-col-val          { font-size: 12px; }
+  .pos-data-row             { gap: 8px; }
+  .pos-data-key,
+  .pos-data-val             { font-size: 11px; }
+
+  /* ── Simulator ── */
+  .sim-hero                 { padding: 16px; }
+  .sim-hero h2              { font-size: 17px; }
+  .sim-hero p               { font-size: 12px; }
+  .sim-hero-badges          { display: none; }
+  .sim-panel-head           { padding: 11px 14px; font-size: 12px; }
+  .sim-panel-body           { padding: 14px; }
+  .form-row                 { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .form-label               { font-size: 10px; }
+  .form-input, .form-select { padding: 8px 10px; font-size: 13px; }
+  .sim-kpi-grid             { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .sim-kpi                  { padding: 11px 12px; }
+  .sim-kpi-label            { font-size: 9px; }
+  .sim-kpi-value            { font-size: 18px; }
+  .sim-config-row           { font-size: 11px; }
+
+  /* ── Curve stats ── */
+  .curve-stats-grid         { grid-template-columns: repeat(2,1fr); gap: 8px; }
+  .curve-stat               { padding: 10px 12px; }
+  .curve-stat-label         { font-size: 10px; }
+  .curve-stat-value         { font-size: 15px; }
+
+  /* ── Chart heights ── */
+  .cw-balance               { height: 200px; }
+  .cw-small                 { height: 150px; }
+  .cw-sim                   { height: 180px; }
+
+  /* ── Symbol cards ── */
+  .sym-grid                 { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .sym-card                 { padding: 11px 13px; }
+  .sym-card-name            { font-size: 13px; }
+  .sym-card-pnl             { font-size: 15px; }
+  .sym-card-stats           { font-size: 10px; gap: 8px; }
+
+  /* ── Section gaps ── */
+  .section-gap              { margin-top: 10px; }
+  .section-label            { font-size: 10px; margin: 14px 0 8px; }
+
+  /* ── Horizontal scroll hint ── */
+  .tbl-wrap::-webkit-scrollbar { height: 3px; }
+  .tbl-wrap::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   RESPONSIVE — SMALL MOBILE  (≤ 480px)
+══════════════════════════════════════════════════════════════════════════════ */
+@media(max-width:480px) {
+  .nav-brand-name           { display: none; }
+  .nav-tab                  { padding: 0 8px; font-size: 11px; }
+  .kpi-grid                 { grid-template-columns: 1fr; }
+  .grid-3                   { grid-template-columns: 1fr; }
+  .kpi-value                { font-size: 22px; }
+  .sim-kpi-grid             { grid-template-columns: 1fr 1fr; }
+  .sym-grid                 { grid-template-columns: 1fr; }
+  .curve-stats-grid         { grid-template-columns: 1fr 1fr; }
+  .pos-grid                 { grid-template-columns: 1fr; }
+  .pos-pnl-detail           { flex-direction: column; }
+  .form-row                 { grid-template-columns: 1fr; }
+  .live-strip               { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .page                     { padding: 10px 8px; }
+  .card-head                { padding: 9px 10px; }
+  .card-body                { padding: 10px; }
+  .dist-label               { min-width: 50px; }
+  table                     { font-size: 11px; }
+  th, td                    { padding: 7px 8px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   RESPONSIVE — WIDE  (≥ 1400px)
+══════════════════════════════════════════════════════════════════════════════ */
+@media(min-width:1400px) {
+  .pos-grid                 { grid-template-columns: repeat(3, 1fr); }
+  .kpi-grid                 { grid-template-columns: repeat(4, 1fr); }
+  .sym-grid                 { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   TOUCH / POINTER IMPROVEMENTS
+══════════════════════════════════════════════════════════════════════════════ */
+@media(hover:none) and (pointer:coarse) {
+  .nav-tab                  { min-height: 44px; }
+  .icon-btn                 { width: 40px; height: 40px; }
+  .filter-select,
+  .filter-input             { height: 40px; }
+  .form-input, .form-select { padding: 11px 13px; }
+  .sim-run-btn              { padding: 14px; }
+  tbody tr:hover td         { background: transparent; }
+}
+
+/* ── Responsive table column visibility ── */
+@media(max-width:640px) {
+  .col-idx, .col-price, .col-dur, .col-date { display: none; }
+}
+@media(max-width:480px) {
+  .col-fill, .col-bal { display: none; }
+}
+
+/* ── Period bar mobile ── */
+@media(max-width:640px) {
+  .period-bar { gap: 4px; padding: 8px 0; }
+  .period-btn { padding: 4px 10px; font-size: 11px; }
+  .period-bar-label { display: none; }
+  .hist-pagination-wrap { gap: 3px; padding: 10px 8px; }
+  .pg-btn { padding: 5px 10px; font-size: 11px; }
+  .pg-num { width: 28px; height: 28px; font-size: 11px; }
+}

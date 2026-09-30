@@ -1,0 +1,8 @@
+.env
+*.session
+__pycache__/
+.pytest_cache/
+*.pyc
+temp_image*.jpg
+temp_image*.png
+

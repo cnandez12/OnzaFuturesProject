@@ -1,0 +1,19 @@
+{
+  "bot_token_env": "BRANDS_BOT_TOKEN",
+  "brands": [
+    {
+      "id": "premium_academy",
+      "name": "Premium Academy Futures",
+      "active": false,
+      "channel_env": "PREMIUM_ACADEMY_CHANNEL_ID",
+      "template": "premium_academy"
+    },
+    {
+      "id": "crypto_rise",
+      "name": "Crypto Rise",
+      "active": false,
+      "channel_env": "CRYPTO_RISE_CHANNEL_ID",
+      "template": "crypto_rise"
+    }
+  ]
+}

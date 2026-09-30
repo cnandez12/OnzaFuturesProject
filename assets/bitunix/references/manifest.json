@@ -1,0 +1,258 @@
+{
+  "zip": "WhatsApp Unknown 2026-09-28 at 9.35.44 PM.zip",
+  "zip_sha256": "a75a7d1bf9af1a5b9d6f96bbef9592c0ab8213c7191d02f0208c68b1632e1be8",
+  "count": 25,
+  "note": "Capturas históricas: solo referencia visual; no usar como plantilla o resultado del proyecto.",
+  "images": [
+    {
+      "id": 1,
+      "file": "bitunix-referencia-01.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.15 PM.jpeg",
+      "sha256": "95e24658d8ec096dc5b55182e9d747c5cef93ca6605d1399f670fd84c1f4500b",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 2,
+      "file": "bitunix-referencia-02.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.16 PM.jpeg",
+      "sha256": "d0acac177b10b233f830096a857f2265192289119b20c5543256acda26212554",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 3,
+      "file": "bitunix-referencia-03.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.16 PM (1).jpeg",
+      "sha256": "166fd50184b2d3e57b6ac3ba5d5c631076722f8c3d779e4a08cebae140977330",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 4,
+      "file": "bitunix-referencia-04.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.16 PM (2).jpeg",
+      "sha256": "9f99d15e76921bba0395fb796a7e78de4fff8155dd220dcb8f1fccea521e8611",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 5,
+      "file": "bitunix-referencia-05.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.16 PM (3).jpeg",
+      "sha256": "cc1822249fac103e2f9eb7451545e58a932aea694bc6448230da65b2467d6f68",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 6,
+      "file": "bitunix-referencia-06.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.16 PM (4).jpeg",
+      "sha256": "4422391f50a25fa16a04c98506a1592eaa9ff32540e79fbec903f87c9f839315",
+      "dimensions": [
+        1320,
+        1069
+      ]
+    },
+    {
+      "id": 7,
+      "file": "bitunix-referencia-07.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.17 PM.jpeg",
+      "sha256": "3819c8e4ba221bf51a4a5885a5ea9ae4d0def038b004b1e6276d105c5c3bfeda",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 8,
+      "file": "bitunix-referencia-08.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.17 PM (1).jpeg",
+      "sha256": "3a7d7917c8a99af9283fe3c09024dd86f51021fb2efd86840e3bee7f352c363c",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 9,
+      "file": "bitunix-referencia-09.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.17 PM (2).jpeg",
+      "sha256": "de867ed9876f302dedea2992d72296b82cfc9e340287312bc05d2288c7860184",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 10,
+      "file": "bitunix-referencia-10.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.17 PM (3).jpeg",
+      "sha256": "c6d9bd379e5e42fdf3bdada020e026b40906907be6aa6893049fcfafa98e23f6",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 11,
+      "file": "bitunix-referencia-11.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.17 PM (4).jpeg",
+      "sha256": "a467011b95506702f1a9d5467d18d3afcf40d3b0e474dca7be23d6001bd23a82",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 12,
+      "file": "bitunix-referencia-12.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.18 PM.jpeg",
+      "sha256": "3148333a02a07086b6007edbde1f1dcdb1f7aae1112ea5dc1bedfadd657ec437",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 13,
+      "file": "bitunix-referencia-13.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.18 PM (1).jpeg",
+      "sha256": "1a71034ab2786e8fd07a024f6fdee25b4ae9d3b0ac3245c9e27ca81154dfe455",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 14,
+      "file": "bitunix-referencia-14.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.18 PM (2).jpeg",
+      "sha256": "babd458b05b541bf78789ed28c5a64a6033caba1a55e6bf28c85e91e0b23f692",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 15,
+      "file": "bitunix-referencia-15.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.18 PM (3).jpeg",
+      "sha256": "c22a15229db22839eb1da7b0f244fa9764b3e99c924c3571e317707bdd82f919",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 16,
+      "file": "bitunix-referencia-16.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.18 PM (4).jpeg",
+      "sha256": "9f2895e6ba8678c907f028a06148146adb21e13cd7612071ea84632cd9e6088e",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 17,
+      "file": "bitunix-referencia-17.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.19 PM.jpeg",
+      "sha256": "6908e0782b13d544f58a69f54cb63ef424f6bc160de4c1c15afd28c9b03768cf",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 18,
+      "file": "bitunix-referencia-18.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.19 PM (1).jpeg",
+      "sha256": "091494c54349614566707acc55527e6a471e137db8777c91c57ff5e4465e1bb7",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 19,
+      "file": "bitunix-referencia-19.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.19 PM (2).jpeg",
+      "sha256": "7985301dd32977b5459ad04064e9cfefc9f6a63241b9588a35792b4d0afab77d",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 20,
+      "file": "bitunix-referencia-20.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.19 PM (3).jpeg",
+      "sha256": "cfda83be171c61a093bcd4ccae2884cc7d6f60227dea3b8baf06bd51b85df0ea",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 21,
+      "file": "bitunix-referencia-21.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.19 PM (4).jpeg",
+      "sha256": "9a66dafedad734693eb561d64d2b5f02bac3ffbb1ee403313294a021edf28702",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 22,
+      "file": "bitunix-referencia-22.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.20 PM.jpeg",
+      "sha256": "bfa64afa9fd96c7dd12bbd4c80c4087cbacc036153203be72e678bd6eb948641",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 23,
+      "file": "bitunix-referencia-23.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.20 PM (1).jpeg",
+      "sha256": "2e396b474ae10f07bf1e28d9d9b507cf3edba6ebf549b489b33384f0318fc599",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    },
+    {
+      "id": 24,
+      "file": "bitunix-referencia-24.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.20 PM (2).jpeg",
+      "sha256": "ca44b9d264694f484d22394764c0de9d7b4ec0ec18a746385a0d09e1600cd679",
+      "dimensions": [
+        736,
+        1600
+      ]
+    },
+    {
+      "id": 25,
+      "file": "bitunix-referencia-25.jpg",
+      "original": "WhatsApp Image 2026-09-27 at 9.07.20 PM (3).jpeg",
+      "sha256": "90f6516fbc2dbf1bc9963585f6810b92fea3531c359ee7f8d1e4f9a6fc2549f7",
+      "dimensions": [
+        1035,
+        1005
+      ]
+    }
+  ]
+}

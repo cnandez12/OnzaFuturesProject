@@ -1,0 +1,34 @@
+{
+  "//": "Registro de destinos webhook. Los secretos deben referenciar variables con env:NOMBRE y nunca guardarse en Git. El formato standard envía entrada (secret/symbol/side/entry/stop_loss/take_profits/leverage) y cierre (secret/symbol/action=close). El formato onza conserva su contrato propio.",
+  "webhooks": [
+    {
+      "id": "cryptopilot_ai",
+      "name": "CryptoPilot AI",
+      "active": false,
+      "format": "standard",
+      "url": "https://trade.cryptopilot-ai.com/api/v1/signals/provider",
+      "close_url": "https://trade.cryptopilot-ai.com/api/v1/signals/provider/close",
+      "secret": ""
+    },
+    {
+      "id": "pa_bitunix",
+      "name": "PA Bitunix",
+      "active": false,
+      "format": "standard",
+      "url": "https://api2.wsasesor.cloud/api/v1/signals/webhook",
+      "close_url": "https://api2.wsasesor.cloud/api/v1/signals/webhook/close",
+      "secret": ""
+    },
+    {
+      "id": "onza_futures",
+      "name": "Onza Futures",
+      "active": false,
+      "format": "onza",
+      "url": "https://api.onza.tech/api/v1/webhooks/signal?source=TradingView",
+      "secret": "",
+      "api_key": "",
+      "timeframe": "15M",
+      "message": "ONZA AI CRYPTOFUTURES"
+    }
+  ]
+}

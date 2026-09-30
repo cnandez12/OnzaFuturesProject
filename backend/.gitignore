@@ -1,0 +1,6 @@
+*.pyc
+__pycache__/
+temp_image*.png
+temp_image*.jpg
+.env
+*.session

@@ -1,0 +1,161 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   SIMULATOR
+══════════════════════════════════════════════════════════════════════════════ */
+.sim-hero {
+  background: linear-gradient(135deg, rgba(38,136,255,.07) 0%, rgba(155,100,255,.05) 60%, rgba(56,232,255,.04) 100%);
+  border: 1px solid rgba(38,136,255,.12);
+  border-radius: var(--rxl); padding: 30px 32px; margin-bottom: 22px;
+  position: relative; overflow: hidden;
+}
+.sim-hero::after {
+  content: '';
+  position: absolute; top: -60px; right: -60px;
+  width: 200px; height: 200px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(38,136,255,.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+.sim-hero h2 { font-size: 22px; font-weight: 800; letter-spacing: -.4px; margin-bottom: 8px; }
+.sim-hero p  { color: var(--text2); font-size: 13px; line-height: 1.6; }
+.sim-hero-badges { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.sim-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(255,255,255,.05); border: 1px solid var(--border2);
+  border-radius: 20px; padding: 4px 12px; font-size: 12px; color: var(--text2);
+}
+
+.sim-layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
+@media(max-width:1100px){ .sim-layout { grid-template-columns: 1fr; } }
+
+.sim-panel {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--rl);
+}
+.sim-panel-head {
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+  font-size: 13px; font-weight: 600;
+}
+.sim-panel-body { padding: 18px; }
+
+.form-group { margin-bottom: 16px; }
+.form-group:last-child { margin-bottom: 0; }
+.form-label {
+  display: block; font-size: 11px; font-weight: 600;
+  color: var(--text2); text-transform: uppercase;
+  letter-spacing: .5px; margin-bottom: 7px;
+}
+.form-input {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border2);
+  border-radius: var(--r); padding: 10px 13px;
+  color: var(--text); font-size: 14px; font-weight: 500;
+  transition: border-color .15s, background .15s;
+}
+.form-input:focus { border-color: var(--blue); background: var(--bg4); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form-select {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border2);
+  border-radius: var(--r); padding: 10px 13px;
+  color: var(--text); font-size: 13px;
+  transition: border-color .15s;
+  cursor: pointer;
+}
+.form-select:focus { border-color: var(--blue); }
+
+input[type="date"].form-input {
+  color-scheme: dark;
+  cursor: pointer;
+}
+input[type="date"].form-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+  cursor: pointer;
+}
+.sim-run-btn {
+  width: 100%; padding: 12px; border-radius: var(--r);
+  background: var(--blue); color: #fff;
+  font-size: 14px; font-weight: 700; letter-spacing: .1px;
+  transition: opacity .15s, transform .1s;
+  margin-top: 6px; display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.sim-run-btn:hover { opacity: .88; transform: translateY(-1px); }
+.sim-run-btn:active { transform: translateY(0); }
+
+.sim-divider {
+  border: none; border-top: 1px solid var(--border);
+  margin: 18px 0;
+}
+.sim-config-row {
+  display: flex; justify-content: space-between;
+  font-size: 12px; padding: 4px 0;
+}
+.sim-config-key  { color: var(--text2); }
+.sim-config-val  { font-weight: 600; color: var(--text); }
+
+.sim-results-col { display: flex; flex-direction: column; gap: 14px; }
+
+.sim-kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media(max-width:700px){ .sim-kpi-grid { grid-template-columns: 1fr 1fr; } }
+
+.sim-kpi {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--rl); padding: 15px 16px;
+  position: relative; overflow: hidden;
+}
+.sim-kpi-accent { position: absolute; top: 0; left: 0; width: 100%; height: 2px; }
+.sim-kpi-label { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 7px; }
+.sim-kpi-value { font-size: 22px; font-weight: 800; letter-spacing: -.4px; line-height: 1; margin-bottom: 5px; }
+.sim-kpi-sub   { font-size: 12px; color: var(--text2); }
+
+.sim-trade-list { display: flex; flex-direction: column; gap: 1px; max-height: 280px; overflow-y: auto; }
+.sim-trade-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: 6px; font-size: 12px;
+  transition: background .1s;
+}
+.sim-trade-row:hover { background: var(--bg4); }
+.sim-trade-sym  { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sim-trade-pct  { font-weight: 600; text-align: right; flex-shrink: 0; }
+.sim-trade-usdt { text-align: right; flex-shrink: 0; }
+.sim-trade-bal  { text-align: right; color: var(--text2); flex-shrink: 0; }
+.sim-trade-reason { flex: 1; display: flex; justify-content: flex-end; }
+.sim-trade-date { color: var(--text3); font-size: 11px; flex-shrink: 0; text-align: right; }
+
+/* ── Compact input grid ── */
+.sim-inputs-card { margin-bottom: 0; }
+.sim-inputs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 16px 16px 12px;
+}
+@media(max-width:768px) { .sim-inputs-grid { grid-template-columns: 1fr 1fr; } }
+@media(max-width:400px) { .sim-inputs-grid { grid-template-columns: 1fr; } }
+.sim-date-row { display: flex; gap: 10px; }
+@media(max-width:400px) { .sim-date-row { flex-direction: column; } }
+
+/* ── Desktop log / mobile log ── */
+.sim-log-desktop { display: block; }
+.sim-log-mobile  { display: none; }
+@media(max-width:640px) {
+  .sim-log-desktop { display: none; }
+  .sim-log-mobile  { display: block; }
+}
+.sim-log-card {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+}
+.sim-log-card:last-child { border-bottom: none; }
+.slc-sym  { font-weight: 700; font-size: 13px; flex: 1; }
+.slc-pnl  { font-weight: 700; font-size: 13px; text-align: right; min-width: 60px; }
+.slc-usdt { font-size: 12px; color: var(--text2); text-align: right; min-width: 54px; }
+.slc-bal  { font-size: 12px; color: var(--text2); text-align: right; min-width: 60px; }
+
+/* ── Collapsible config ── */
+.sim-config-details { overflow: hidden; }
+.sim-config-details[open] .sim-config-summary { border-bottom: 1px solid var(--border); }
+.sim-config-summary {
+  padding: 12px 16px; cursor: pointer; list-style: none;
+  font-size: 13px; font-weight: 600; color: var(--text2);
+  display: flex; align-items: center;
+  transition: color .15s;
+}
+.sim-config-summary:hover { color: var(--text); }
+.sim-config-summary::-webkit-details-marker { display: none; }
