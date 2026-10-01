@@ -71,6 +71,7 @@ class BitunixCardsTests(unittest.TestCase):
                  "typeSignal": "tp2", "entry": 100, "price": 102,
                  "timeframe": "30M", "signalId": "sample"}
         response = Mock(status_code=200)
+        response.json.return_value = {"ok": True, "result": {"message_id": 458}}
         with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test", "DESTINATION_CHANNEL_ID": "-1"}), \
              patch("onza_delivery._event_amount", return_value=(Decimal("1"), Decimal("5"))), \
              patch("onza_delivery.render_event_image", return_value=b"jpeg-data") as render, \

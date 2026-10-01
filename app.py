@@ -14,6 +14,7 @@ from flask import jsonify, request
 from dashboard.app import app, check_auth
 from audit_scenarios import MODES, evaluate, summarize
 from onza_contract import InvalidSignal, canonicalize
+from audit_log import audit
 
 
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
@@ -119,19 +120,25 @@ def audit_results():
 
 @app.post("/webhook/tradingview")
 def tradingview_webhook():
+    audit("TV PETICION RECIBIDA")
     expected = os.getenv("TRADINGVIEW_API_KEY")
     if not expected:
+        audit("TV RECHAZADO", http=503, motivo="TRADINGVIEW_API_KEY no configurada")
         return jsonify(error="Receptor no configurado"), 503
     raw = request.get_json(silent=True)
     if not isinstance(raw, dict):
+        audit("TV RECHAZADO", http=400, motivo="JSON invalido")
         return jsonify(error="Se requiere JSON válido"), 400
     supplied = raw.get("apiKey", "")
     if not isinstance(supplied, str) or not hmac.compare_digest(supplied, expected):
+        audit("TV RECHAZADO", http=401, motivo="Autenticacion invalida")
         return jsonify(error="API key inválida"), 401
     try:
         payload = canonicalize(raw)
     except InvalidSignal as exc:
+        audit("TV RECHAZADO", http=422, motivo=str(exc))
         return jsonify(error=str(exc)), 422
+    audit("TV VALIDADO", payload, entrada=payload.get("entry"), precio=payload.get("price"))
     try:
         with database_connection() as conn:
             with conn.cursor() as cur:
@@ -152,15 +159,18 @@ def tradingview_webhook():
                     )
                     previous = cur.fetchone()[0]
                     if previous != payload:
+                        audit("TV CONFLICTO", payload, http=409, motivo="Duplicado con datos distintos")
                         return jsonify(error="Evento duplicado con datos diferentes"), 409
+                    audit("TV DUPLICADO", payload, http=200, accion="Sin repetir entregas")
                     return jsonify(status="duplicate", signalId=payload["signalId"]), 200
                 event_id = row[0]
                 # Se emite al confirmar la transacción; despierta al despachador
                 # sin esperar el siguiente sondeo de respaldo.
                 cur.execute("NOTIFY onza_events")
     except (psycopg2.Error, RuntimeError) as exc:
-        app.logger.error("No se pudo guardar evento TradingView: %s", type(exc).__name__)
+        audit("TV ERROR AL GUARDAR", payload, http=503, error=type(exc).__name__)
         return jsonify(error="Base de datos no disponible"), 503
+    audit("TV GUARDADO EN COLA", payload, event_id, http=202)
     return jsonify(status="queued", eventId=event_id, signalId=payload["signalId"]), 202
 
 

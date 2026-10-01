@@ -11,6 +11,7 @@ import select
 import sys
 import time
 from decimal import Decimal
+from datetime import datetime, timezone
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -19,6 +20,7 @@ from dotenv import load_dotenv
 from onza_contract import InvalidSignal
 from onza_delivery import post_onza, post_telegram
 from onza_processing import DeferredEvent, apply_event
+from audit_log import audit, audit_wait
 
 
 load_dotenv()
@@ -27,6 +29,9 @@ ONZA_REQUIRED = {"entry": (), "tp1": ("entry",),
                  "tp2": ("entry", "tp1"),
                  "tp3": ("entry", "tp1", "tp2"),
                  "sl": ("entry",), "close": ("entry",)}
+
+# Dar prioridad al intento de Onza sin depender de su respuesta ni de su disponibilidad.
+LOCAL_READY = "(onza_started_at IS NOT NULL OR received_at <= now() - interval '1 second')"
 
 
 def onza_gate(event: dict, related: list[dict]) -> tuple[bool, str | None]:
@@ -81,9 +86,8 @@ def listen_onza():
 def apply_pending(limit=50) -> int:
     with connect() as conn:
         with conn.cursor() as cur:
-            cur.execute("""SELECT id FROM tv_events WHERE state = 'pending'
-                           AND onza_status IN ('delivered', 'failed', 'unknown')
-                           ORDER BY id LIMIT %s""", (limit,))
+            cur.execute(f"""SELECT id FROM tv_events WHERE state = 'pending'
+                           AND {LOCAL_READY} ORDER BY id LIMIT %s""", (limit,))
             ids = [row[0] for row in cur.fetchall()]
     completed = 0
     for event_id in ids:
@@ -91,8 +95,8 @@ def apply_pending(limit=50) -> int:
             with connect() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute(
-                        """SELECT id, payload, received_at FROM tv_events WHERE id = %s
-                           AND state = 'pending' AND onza_status IN ('delivered', 'failed', 'unknown')
+                        f"""SELECT id, payload, received_at FROM tv_events WHERE id = %s
+                           AND state = 'pending' AND {LOCAL_READY}
                            FOR UPDATE SKIP LOCKED""",
                         (event_id,),
                     )
@@ -100,24 +104,31 @@ def apply_pending(limit=50) -> int:
                     if event is None:
                         continue
                     try:
+                        cur.execute("SAVEPOINT local_event")
                         apply_event(cur, event["payload"], event["received_at"])
-                    except DeferredEvent:
+                    except DeferredEvent as exc:
+                        cur.execute("ROLLBACK TO SAVEPOINT local_event")
+                        audit_wait("PROCESAMIENTO EN ESPERA", event["payload"], event_id, motivo=str(exc))
                         continue
                     except InvalidSignal as exc:
+                        cur.execute("ROLLBACK TO SAVEPOINT local_event")
                         cur.execute(
                             """UPDATE tv_events SET state='rejected', error=%s,
-                               onza_status='skipped', telegram_status='skipped' WHERE id=%s""",
+                               onza_status=CASE WHEN onza_status='pending' THEN 'skipped' ELSE onza_status END,
+                               telegram_status='skipped' WHERE id=%s""",
                             (str(exc), event_id),
                         )
                         completed += 1
+                        audit("PROCESAMIENTO RECHAZADO", event["payload"], event_id, motivo=str(exc))
                         continue
                     cur.execute(
                         "UPDATE tv_events SET state='applied', applied_at=now() WHERE id=%s",
                         (event_id,),
                     )
                     completed += 1
+            audit("PROCESAMIENTO GUARDADO", event["payload"], event_id)
         except (psycopg2.Error, RuntimeError) as exc:
-            print(f"[worker] Evento {event_id} pendiente por {type(exc).__name__}", flush=True)
+            audit("PROCESAMIENTO ERROR", event_id=event_id, error=type(exc).__name__)
     return completed
 
 
@@ -127,10 +138,12 @@ def claim_delivery(channel: str):
     onza_ready = bool(os.getenv("ONZA_API_KEY"))
     telegram_ready = bool(os.getenv("TELEGRAM_BOT_TOKEN") and os.getenv("DESTINATION_CHANNEL_ID"))
     if (channel == "onza" and not onza_ready) or (channel == "telegram" and not telegram_ready):
+        audit_wait("CONFIGURACION PENDIENTE", canal=channel,
+                   motivo="Faltan variables del canal")
         return None
     queue_filter = ("state IN ('pending', 'applied') AND onza_status='pending'"
                     if channel == "onza" else
-                    "state='applied' AND telegram_status='pending' AND onza_status='delivered'")
+                    "state='applied' AND telegram_status='pending'")
     with connect() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
@@ -151,19 +164,25 @@ def claim_delivery(channel: str):
                     send_onza, invalid = onza_gate(event, related)
                     if invalid:
                         cur.execute(
-                            """UPDATE tv_events SET state='rejected', error=%s,
-                               onza_status='skipped', telegram_status='skipped' WHERE id=%s""",
+                            """UPDATE tv_events SET onza_result=%s,
+                               onza_status='skipped' WHERE id=%s""",
                             (invalid, event["id"]),
                         )
+                        audit("ONZA EVENTO OMITIDO", event["payload"], event["id"], motivo=invalid)
                         continue
+                    if not send_onza:
+                        audit_wait("ONZA EN ESPERA", event["payload"], event["id"],
+                                   motivo="Predecesor sin confirmar o cierre ambiguo; Telegram independiente")
                 predecessors = [row for row in related
                                 if row["state"] == "applied" and
                                 EVENT_ORDER[row["event_type"]] < EVENT_ORDER[event["event_type"]]]
                 send_telegram = (
                     channel == "telegram" and telegram_ready and event["telegram_status"] == "pending"
-                    and event["onza_status"] == "delivered"
                     and all(row["telegram_status"] == "delivered" for row in predecessors)
                 )
+                if channel == "telegram" and not send_telegram:
+                    audit_wait("TELEGRAM EN ESPERA", event["payload"], event["id"],
+                               motivo="Publicacion anterior de esta señal pendiente o sin confirmar")
                 if not send_onza and not send_telegram:
                     continue
                 if send_onza:
@@ -199,12 +218,26 @@ def deliver_one(channel: str) -> bool:
         return False
     event_id, payload, send_onza, send_telegram, trade, image_sequence, event_time = claimed
     updates = {}
+    started = time.monotonic()
+    queue_ms = None
+    if event_time is not None:
+        stamp = event_time if event_time.tzinfo else event_time.replace(tzinfo=timezone.utc)
+        queue_ms = max(0, round((datetime.now(timezone.utc) - stamp).total_seconds() * 1000))
+    audit(f"{channel.upper()} ENVIO INICIADO", payload, event_id,
+          desde_recepcion_ms=queue_ms,
+          contenido=("texto" if payload.get("typeSignal") == "entry" else "imagen y texto")
+          if channel == "telegram" else "webhook")
     if send_onza:
         updates["onza_status"], updates["onza_result"] = post_onza(payload)
     if send_telegram:
         updates["telegram_status"], updates["telegram_result"] = post_telegram(
-            payload, trade, image_sequence=image_sequence or 1, event_time=event_time
+            payload, trade, image_sequence=image_sequence or 1, event_time=event_time, event_id=event_id
         )
+    result_label = {"delivered": "CONFIRMADO", "unknown": "SIN CONFIRMACION",
+                    "failed": "ERROR", "pending": "PENDIENTE"}[updates[f"{channel}_status"]]
+    audit(f"{channel.upper()} {result_label}", payload, event_id,
+          estado=updates[f"{channel}_status"], detalle=updates[f"{channel}_result"],
+          duracion_ms=round((time.monotonic() - started) * 1000))
     try:
         with connect() as conn:
             with conn.cursor() as cur:
@@ -220,8 +253,9 @@ def deliver_one(channel: str) -> bool:
                         (updates["telegram_status"], updates["telegram_result"], event_id),
                     )
     except psycopg2.Error as exc:
-        print(f"[worker] Resultado del evento {event_id} no persistido: {type(exc).__name__}", flush=True)
-    print(f"[worker] Evento {event_id}: {updates}", flush=True)
+        audit("RESULTADO NO GUARDADO", payload, event_id, canal=channel, error=type(exc).__name__)
+        return True
+    audit("RESULTADO GUARDADO", payload, event_id, canal=channel)
     return True
 
 
@@ -230,6 +264,7 @@ def main():
     if role not in ("onza", "process", "telegram"):
         raise SystemExit("Uso: worker.py [onza|process|telegram]")
     listener = None
+    audit("WORKER INICIADO", canal=role)
     while True:
         try:
             if role == "onza" and listener is None:
@@ -252,7 +287,7 @@ def main():
             if listener is not None:
                 listener.close()
                 listener = None
-            print(f"[worker] Esperando DB: {type(exc).__name__}", flush=True)
+            audit_wait("WORKER ERROR", canal=role, error=type(exc).__name__)
             time.sleep(2)
 
 

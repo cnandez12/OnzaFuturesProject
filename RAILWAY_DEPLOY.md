@@ -4,7 +4,9 @@ Esta carpeta aún no está desplegada. No contiene las claves ni el dominio de p
 
 ## Flujo prioritario
 
-`TradingView → POST /webhook/tradingview → registro mínimo e idempotente en PostgreSQL → trabajador Onza → procesamiento local → Telegram/dashboard`.
+`TradingView → registro en PostgreSQL → envío prioritario a Onza + procesamiento local independiente → Telegram/dashboard`.
+
+El proceso local puede comenzar al iniciar el intento Onza o tras un segundo desde la recepción. No necesita confirmación de Onza. Los eventos válidos que quedaron pendientes de Telegram por timeouts anteriores se publicarán al desplegar; los envíos ambiguos a Onza no se repiten automáticamente.
 
 El registro mínimo anterior al envío es necesario para reconocer reintentos de TradingView y no duplicar órdenes. El receptor devuelve `202` sin esperar a Onza. PostgreSQL despierta al trabajador de Onza con `LISTEN/NOTIFY`; hay un sondeo de respaldo cada 500 ms. El trabajador no calcula estadísticas ni genera imágenes. `202` significa **recibido por nuestro servidor**, no entregado a Onza. Ninguna red ofrece entrega literalmente instantánea; los tiempos reales se miden con `received_at`, `onza_started_at` y `onza_finished_at`.
 

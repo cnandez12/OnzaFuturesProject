@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from datetime import datetime
 from decimal import Decimal
 
@@ -10,6 +11,7 @@ import requests
 
 from onza_processing import margin
 from bitunix_card import render_event_image as render_bitunix_event_image
+from audit_log import audit
 
 
 ONZA_URL = "https://api.onza.tech/api/v1/webhooks/signal?source=TradingView"
@@ -26,8 +28,12 @@ def post_onza(payload: dict) -> tuple[str, str]:
         response = requests.post(
             os.getenv("ONZA_WEBHOOK_URL", ONZA_URL), json=outbound, timeout=10
         )
+    except requests.ConnectTimeout:
+        return "unknown", "Timeout de conexion; recepcion Onza no confirmada; sin reenvio automatico"
+    except requests.ReadTimeout:
+        return "unknown", "Timeout de lectura; Onza pudo recibirlo; sin reenvio automatico"
     except requests.Timeout:
-        return "unknown", "Tiempo de espera agotado; revisar en Onza antes de reenviar"
+        return "unknown", "Timeout; fase no identificada; recepcion Onza no confirmada"
     except requests.RequestException as exc:
         return "failed", type(exc).__name__
     if response.status_code in (200, 201):
@@ -78,7 +84,8 @@ def telegram_text(payload: dict) -> str:
 
 
 def post_telegram(payload: dict, trade: dict | None, *,
-                  image_sequence: int = 1, event_time: datetime | None = None) -> tuple[str, str]:
+                  image_sequence: int = 1, event_time: datetime | None = None,
+                  event_id: int | None = None) -> tuple[str, str]:
     token = os.getenv("TELEGRAM_BOT_TOKEN", "")
     channel = os.getenv("DESTINATION_CHANNEL_ID", "")
     if not token or not channel:
@@ -94,10 +101,14 @@ def post_telegram(payload: dict, trade: dict | None, *,
             if trade is None:
                 return "failed", "Trade no encontrado para imagen"
             amount, percent = _event_amount(payload, trade)
+            started = time.monotonic()
             picture = render_event_image(
                 payload, amount, percent,
                 image_sequence=image_sequence, event_time=event_time,
             )
+            audit("IMAGEN GENERADA", payload, event_id,
+                  diseno=(image_sequence - 1) % 25 + 1,
+                  duracion_ms=round((time.monotonic() - started) * 1000))
             response = requests.post(
                 base + "/sendPhoto",
                 data={"chat_id": channel, "caption": telegram_text(payload)},
@@ -107,6 +118,15 @@ def post_telegram(payload: dict, trade: dict | None, *,
         return "unknown", "Tiempo de espera agotado; revisar Telegram antes de reenviar"
     except (requests.RequestException, OSError, ValueError, KeyError) as exc:
         return "failed", type(exc).__name__
-    if response.status_code == 200:
-        return "delivered", "HTTP 200"
-    return "failed", f"HTTP {response.status_code}"
+    try:
+        body = response.json()
+    except ValueError:
+        return "unknown", f"HTTP {response.status_code}; respuesta Telegram no interpretable"
+    if not isinstance(body, dict):
+        return "unknown", f"HTTP {response.status_code}; respuesta Telegram inesperada"
+    if response.status_code == 200 and body.get("ok") is True:
+        return "delivered", f"HTTP 200; message_id={body.get('result', {}).get('message_id')}"
+    # No registrar cuerpos HTTP completos: pueden contener datos o credenciales.
+    reasons = {400: "Solicitud o canal invalido", 401: "Token no autorizado",
+               403: "Bot sin permiso o bloqueado", 429: "Limite de Telegram"}
+    return "failed", f"HTTP {response.status_code}; {reasons.get(response.status_code, 'Telegram no confirmo el mensaje')}"
