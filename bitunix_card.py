@@ -129,7 +129,6 @@ def render_event_image(
     draw.text((269, 752), price_text, fill=WHITE,
               font=_fit_font(draw, price_text, 285, 36, 21))
     draw.text((60, 920), _timestamp(event_time), fill=GRAY, font=font(False, 31))
-    draw.text((640, 927), "SIMULADO · SIN FILL BITUNIX", fill=GRAY, font=font(False, 15))
 
     output = io.BytesIO()
     image.save(output, format="JPEG", quality=93, optimize=True)
