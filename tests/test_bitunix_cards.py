@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import unittest
 from decimal import Decimal
@@ -71,16 +72,27 @@ class BitunixCardsTests(unittest.TestCase):
                  "typeSignal": "tp2", "entry": 100, "price": 102,
                  "timeframe": "30M", "signalId": "sample"}
         response = Mock(status_code=200)
-        response.json.return_value = {"ok": True, "result": {"message_id": 458}}
+        response.json.return_value = {"ok": True, "result": {"message_id": 458, "chat": {"id": -1}}}
         with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test", "DESTINATION_CHANNEL_ID": "-1"}), \
              patch("onza_delivery._event_amount", return_value=(Decimal("1"), Decimal("5"))), \
              patch("onza_delivery.render_event_image", return_value=b"jpeg-data") as render, \
              patch("onza_delivery.requests.post", return_value=response) as send:
-            result = post_telegram(event, {}, image_sequence=27)
+            result = post_telegram(event, {"telegram_entry_message_id": 123, "telegram_chat_id": "-1"}, image_sequence=27)
         self.assertEqual(result[0], "delivered")
         self.assertEqual(render.call_args.kwargs["image_sequence"], 27)
         self.assertTrue(send.call_args.args[0].endswith("/sendPhoto"))
         self.assertEqual(send.call_args.kwargs["files"]["photo"][1], b"jpeg-data")
+        self.assertEqual(json.loads(send.call_args.kwargs["data"]["reply_parameters"]),
+                         {"message_id": 123, "allow_sending_without_reply": False})
+        self.assertEqual(result.message_id, 458)
+        self.assertEqual(result.chat_id, "-1")
+
+    def test_result_without_entry_message_never_posts(self):
+        with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test", "DESTINATION_CHANNEL_ID": "-1"}), \
+             patch("onza_delivery.requests.post") as send:
+            result = post_telegram({"typeSignal": "tp1"}, {})
+        self.assertEqual(result.status, "pending")
+        send.assert_not_called()
 
 
 if __name__ == "__main__":

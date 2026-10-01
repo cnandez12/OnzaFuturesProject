@@ -6,11 +6,22 @@ from contextlib import redirect_stdout
 from unittest.mock import Mock, patch
 
 import requests
-from audit_log import audit
+from audit_log import audit, audit_wait, _waits
 from onza_delivery import post_onza, post_telegram
 
 
 class AuditLogTests(unittest.TestCase):
+    def test_unchanged_wait_is_logged_once_and_changed_reason_is_logged(self):
+        _waits.clear()
+        with patch("audit_log.audit") as log:
+            for _ in range(1000):
+                audit_wait("ONZA EN ESPERA", event_id=7, motivo="Esperando entrada")
+            self.assertEqual(log.call_count, 1)
+            audit_wait("ONZA EN ESPERA", event_id=7, motivo="Esperando TP1")
+            self.assertEqual(log.call_count, 2)
+            audit_wait("ONZA EN ESPERA", event_id=8, motivo="Esperando entrada")
+            self.assertEqual(log.call_count, 3)
+        _waits.clear()
     def test_payload_secrets_and_message_are_not_logged(self):
         output = io.StringIO()
         with redirect_stdout(output):

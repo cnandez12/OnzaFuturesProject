@@ -202,11 +202,17 @@ def claim_delivery(channel: str):
                 trade = None
                 if send_telegram and event["event_type"] != "entry":
                     cur.execute(
-                        """SELECT t.*, s.margin_used FROM trades t JOIN tv_signals s ON s.id=t.message_id
+                        """SELECT t.*, s.margin_used, s.telegram_entry_message_id, s.telegram_chat_id
+                           FROM trades t JOIN tv_signals s ON s.id=t.message_id
                            WHERE s.signal_id=%s""",
                         (event["signal_id"],),
                     )
                     trade = cur.fetchone()
+                    if not trade or not trade.get("telegram_entry_message_id") or not trade.get("telegram_chat_id"):
+                        cur.execute("UPDATE tv_events SET telegram_status='pending' WHERE id=%s", (event["id"],))
+                        audit_wait("TELEGRAM EN ESPERA", event["payload"], event["id"],
+                                   motivo="Falta message_id/chat_id de la entrada; no se publica una respuesta suelta")
+                        continue
                 return (event["id"], event["payload"], send_onza, send_telegram, trade,
                         image_sequence if send_telegram else None, event.get("received_at"))
     return None
@@ -230,9 +236,11 @@ def deliver_one(channel: str) -> bool:
     if send_onza:
         updates["onza_status"], updates["onza_result"] = post_onza(payload)
     if send_telegram:
-        updates["telegram_status"], updates["telegram_result"] = post_telegram(
+        telegram_delivery = post_telegram(
             payload, trade, image_sequence=image_sequence or 1, event_time=event_time, event_id=event_id
         )
+        updates["telegram_status"] = telegram_delivery.status
+        updates["telegram_result"] = telegram_delivery.detail
     result_label = {"delivered": "CONFIRMADO", "unknown": "SIN CONFIRMACION",
                     "failed": "ERROR", "pending": "PENDIENTE"}[updates[f"{channel}_status"]]
     audit(f"{channel.upper()} {result_label}", payload, event_id,
@@ -249,9 +257,16 @@ def deliver_one(channel: str) -> bool:
                     )
                 if send_telegram:
                     cur.execute(
-                        "UPDATE tv_events SET telegram_status=%s, telegram_result=%s WHERE id=%s",
-                        (updates["telegram_status"], updates["telegram_result"], event_id),
+                        """UPDATE tv_events SET telegram_status=%s, telegram_result=%s,
+                           telegram_message_id=%s WHERE id=%s""",
+                        (updates["telegram_status"], updates["telegram_result"], telegram_delivery.message_id, event_id),
                     )
+                    if payload["typeSignal"] == "entry" and telegram_delivery.status == "delivered":
+                        cur.execute(
+                            """UPDATE tv_signals SET telegram_entry_message_id=%s, telegram_chat_id=%s
+                               WHERE signal_id=%s""",
+                            (telegram_delivery.message_id, telegram_delivery.chat_id, payload["signalId"]),
+                        )
     except psycopg2.Error as exc:
         audit("RESULTADO NO GUARDADO", payload, event_id, canal=channel, error=type(exc).__name__)
         return True

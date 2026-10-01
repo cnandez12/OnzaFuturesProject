@@ -9,6 +9,7 @@ class Cursor:
     def __init__(self, event):
         self.event = event
         self.sql = []
+        self.params = []
         self.current = ""
 
     def __enter__(self):
@@ -20,6 +21,7 @@ class Cursor:
     def execute(self, sql, _params=None):
         self.current = sql
         self.sql.append(sql)
+        self.params.append(_params)
 
     def fetchall(self):
         if "FOR UPDATE SKIP LOCKED" in self.current:
@@ -30,7 +32,7 @@ class Cursor:
         if "RETURNING image_sequence" in self.current:
             return {"image_sequence": None if self.event["event_type"] == "entry" else 1}
         if "FROM trades" in self.current:
-            return {"margin_used": 20}
+            return {"margin_used": 20, "telegram_entry_message_id": 100, "telegram_chat_id": "-1"}
         return None
 
 
@@ -49,6 +51,18 @@ class Connection:
 
 
 class WorkerPriorityTests(unittest.TestCase):
+    def test_confirmed_entry_saves_telegram_parent_for_same_signal(self):
+        from onza_delivery import TelegramDelivery
+        cursor = Cursor({})
+        payload = {"signalId": "signal-A", "typeSignal": "entry"}
+        with patch.object(worker, "claim_delivery", return_value=(7, payload, False, True, None, None, None)), \
+             patch.object(worker, "post_telegram", return_value=TelegramDelivery("delivered", "HTTP 200", 458, "-100123")), \
+             patch.object(worker, "connect", return_value=Connection(cursor)):
+            self.assertTrue(worker.deliver_one("telegram"))
+        index = next(i for i, sql in enumerate(cursor.sql) if "UPDATE tv_signals" in sql)
+        self.assertEqual(cursor.params[index], (458, "-100123", "signal-A"))
+        self.assertIn("telegram_message_id", cursor.sql[0])
+
     def test_local_event_is_applied_without_calling_onza(self):
         event = {"id": 7, "payload": {"signalId": "s", "typeSignal": "entry"}, "received_at": None}
         cursor = Cursor(event)

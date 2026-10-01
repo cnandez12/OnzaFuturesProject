@@ -12,7 +12,7 @@ Copia independiente del motor de Señales Smart Crypto, del dashboard de futuros
 
 ## Alcance de la auditoría
 
-Los logs JSON de `audit_log.py` incluyen hora de Colombia (-05:00), etapa, evento, signalId, símbolo, dirección y temporalidad. Etapas: TV PETICION RECIBIDA, TV VALIDADO, TV GUARDADO EN COLA, ONZA ENVIO INICIADO, ONZA CONFIRMADO/SIN CONFIRMACION/ERROR, PROCESAMIENTO GUARDADO, IMAGEN GENERADA y TELEGRAM CONFIRMADO/ERROR. Se registran duración, fase del timeout y message_id de Telegram; nunca se imprime el payload completo ni claves. Las esperas se resumen una vez por minuto por evento/motivo.
+Los logs JSON de `audit_log.py` incluyen hora de Colombia (-05:00), etapa, evento, signalId, símbolo, dirección y temporalidad. Etapas: TV PETICION RECIBIDA, TV VALIDADO, TV GUARDADO EN COLA, ONZA ENVIO INICIADO, ONZA CONFIRMADO/SIN CONFIRMACION/ERROR, PROCESAMIENTO GUARDADO, IMAGEN GENERADA y TELEGRAM CONFIRMADO/ERROR. Se registran duración, fase del timeout y message_id de Telegram; nunca se imprime el payload completo ni claves. Las esperas se registran una vez por evento y de nuevo si cambia el motivo. El seguimiento de estas esperas se reinicia al arrancar cada worker y conserva hasta 20.000 casos.
 
 Al desplegar esta versión, los eventos válidos pendientes de Telegram por timeout de Onza quedan habilitados automáticamente. No se reenvían a Onza los eventos unknown/sending: siguen requiriendo conciliación. Los eventos rechazados localmente, faltantes de entrada/TP previo o publicaciones Telegram fallidas/ambiguas requieren revisión explícita. Un HTTP 200/201 confirma el webhook de Onza, no una ejecución de trading.
 
@@ -23,6 +23,10 @@ Al desplegar esta versión, los eventos válidos pendientes de Telegram por time
 El endpoint público `GET /api/audit/results?mode=partial_no_be|partial_be|max_tp` calcula las tres lecturas desde los eventos aplicados. La vista incluye conteos de BE activado, inferencias y casos sin recorrido verificable. No hay datos de ejecución real, comisiones, funding, slippage, liquidaciones o gaps de Bitunix; por eso el P&L y el profit factor son **brutos teóricos**, no una certificación de rentabilidad en vivo. El JSON Pine→receptor→Onza conserva el formato existente; los nuevos campos de auditoría quedan internos en PostgreSQL.
 
 ## Estructura
+
+Las entradas confirmadas por Telegram guardan `telegram_entry_message_id` y `telegram_chat_id` por signalId. Las imágenes TP/SL/cierre usan `reply_parameters` para responder a esa entrada, y cada evento guarda su propio `telegram_message_id`. Si falta la referencia, el resultado espera en vez de publicarse suelto. Los mensajes anteriores a esta versión no se vinculan retroactivamente.
+
+Para un reinicio expresamente solicitado: detener receptor y todos los workers, configurar la conexión exclusiva de Onza y ejecutar `python reset_onza_data.py --execute --workers-stopped`. El comando verifica la identidad y las tablas antes de vaciar datos y reiniciar secuencias en una transacción. Conserva el esquema y la marca de identidad del proyecto. No borra publicaciones de Telegram ni operaciones en Onza. No se ejecuta durante el arranque normal.
 
 - `backend/`: copia del código, imágenes, fuentes y pruebas originales para referencia. Su bot de Telegram no forma parte del arranque nuevo.
 - `dashboard/`: copia del dashboard adaptada a señales de TradingView.

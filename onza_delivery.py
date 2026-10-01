@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import json
 import time
+from typing import NamedTuple
 from datetime import datetime
 from decimal import Decimal
 
@@ -15,6 +17,13 @@ from audit_log import audit
 
 
 ONZA_URL = "https://api.onza.tech/api/v1/webhooks/signal?source=TradingView"
+
+
+class TelegramDelivery(NamedTuple):
+    status: str
+    detail: str
+    message_id: int | None = None
+    chat_id: str | None = None
 
 
 def post_onza(payload: dict) -> tuple[str, str]:
@@ -85,11 +94,11 @@ def telegram_text(payload: dict) -> str:
 
 def post_telegram(payload: dict, trade: dict | None, *,
                   image_sequence: int = 1, event_time: datetime | None = None,
-                  event_id: int | None = None) -> tuple[str, str]:
+                  event_id: int | None = None) -> TelegramDelivery:
     token = os.getenv("TELEGRAM_BOT_TOKEN", "")
     channel = os.getenv("DESTINATION_CHANNEL_ID", "")
     if not token or not channel:
-        return "pending", "Canal o bot de Telegram pendiente"
+        return TelegramDelivery("pending", "Canal o bot de Telegram pendiente")
     base = f"https://api.telegram.org/bot{token}"
     try:
         if payload["typeSignal"] == "entry":
@@ -99,7 +108,11 @@ def post_telegram(payload: dict, trade: dict | None, *,
             )
         else:
             if trade is None:
-                return "failed", "Trade no encontrado para imagen"
+                return TelegramDelivery("failed", "Trade no encontrado para imagen")
+            parent_id = trade.get("telegram_entry_message_id")
+            parent_chat = trade.get("telegram_chat_id")
+            if not parent_id or not parent_chat:
+                return TelegramDelivery("pending", "Esperando referencia al mensaje de entrada de Telegram")
             amount, percent = _event_amount(payload, trade)
             started = time.monotonic()
             picture = render_event_image(
@@ -107,26 +120,37 @@ def post_telegram(payload: dict, trade: dict | None, *,
                 image_sequence=image_sequence, event_time=event_time,
             )
             audit("IMAGEN GENERADA", payload, event_id,
+                  responde_a=parent_id,
                   diseno=(image_sequence - 1) % 25 + 1,
                   duracion_ms=round((time.monotonic() - started) * 1000))
             response = requests.post(
                 base + "/sendPhoto",
-                data={"chat_id": channel, "caption": telegram_text(payload)},
+                data={"chat_id": parent_chat, "caption": telegram_text(payload),
+                      "reply_parameters": json.dumps({"message_id": int(parent_id),
+                                                       "allow_sending_without_reply": False})},
                 files={"photo": ("onza-event.jpg", picture, "image/jpeg")}, timeout=15,
             )
     except requests.Timeout:
-        return "unknown", "Tiempo de espera agotado; revisar Telegram antes de reenviar"
+        return TelegramDelivery("unknown", "Tiempo de espera agotado; revisar Telegram antes de reenviar")
     except (requests.RequestException, OSError, ValueError, KeyError) as exc:
-        return "failed", type(exc).__name__
+        return TelegramDelivery("failed", type(exc).__name__)
     try:
         body = response.json()
     except ValueError:
-        return "unknown", f"HTTP {response.status_code}; respuesta Telegram no interpretable"
+        return TelegramDelivery("unknown", f"HTTP {response.status_code}; respuesta Telegram no interpretable")
     if not isinstance(body, dict):
-        return "unknown", f"HTTP {response.status_code}; respuesta Telegram inesperada"
+        return TelegramDelivery("unknown", f"HTTP {response.status_code}; respuesta Telegram inesperada")
     if response.status_code == 200 and body.get("ok") is True:
-        return "delivered", f"HTTP 200; message_id={body.get('result', {}).get('message_id')}"
+        result = body.get("result")
+        if not isinstance(result, dict):
+            return TelegramDelivery("unknown", "Telegram no devolvio el mensaje confirmado")
+        message_id = result.get("message_id")
+        chat = result.get("chat")
+        chat_id = chat.get("id") if isinstance(chat, dict) else None
+        if type(message_id) is not int or message_id <= 0 or type(chat_id) is not int:
+            return TelegramDelivery("unknown", "Telegram no devolvio message_id/chat.id validos")
+        return TelegramDelivery("delivered", f"HTTP 200; message_id={message_id}", message_id, str(chat_id))
     # No registrar cuerpos HTTP completos: pueden contener datos o credenciales.
     reasons = {400: "Solicitud o canal invalido", 401: "Token no autorizado",
                403: "Bot sin permiso o bloqueado", 429: "Limite de Telegram"}
-    return "failed", f"HTTP {response.status_code}; {reasons.get(response.status_code, 'Telegram no confirmo el mensaje')}"
+    return TelegramDelivery("failed", f"HTTP {response.status_code}; {reasons.get(response.status_code, 'Telegram no confirmo el mensaje')}")

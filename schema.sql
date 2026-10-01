@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS tv_signals (
 -- Idempotente para instalaciones existentes de este proyecto.
 ALTER TABLE tv_signals ADD COLUMN IF NOT EXISTS be_activated_at TIMESTAMPTZ;
 ALTER TABLE tv_signals ADD COLUMN IF NOT EXISTS margin_used NUMERIC(18,8);
+ALTER TABLE tv_signals ADD COLUMN IF NOT EXISTS telegram_entry_message_id BIGINT;
+ALTER TABLE tv_signals ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT;
 
 CREATE TABLE IF NOT EXISTS tv_events (
     id BIGSERIAL PRIMARY KEY,
@@ -95,6 +97,7 @@ CREATE TABLE IF NOT EXISTS tv_events (
 ALTER TABLE tv_events ADD COLUMN IF NOT EXISTS onza_started_at TIMESTAMPTZ;
 ALTER TABLE tv_events ADD COLUMN IF NOT EXISTS onza_finished_at TIMESTAMPTZ;
 ALTER TABLE tv_events ADD COLUMN IF NOT EXISTS image_sequence BIGINT;
+ALTER TABLE tv_events ADD COLUMN IF NOT EXISTS telegram_message_id BIGINT;
 CREATE SEQUENCE IF NOT EXISTS bitunix_card_rotation_seq;
 
 CREATE INDEX IF NOT EXISTS idx_tv_events_pending ON tv_events (id) WHERE state = 'pending';

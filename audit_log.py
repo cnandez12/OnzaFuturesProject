@@ -1,9 +1,9 @@
 """Logs correlacionados, sin payloads completos ni credenciales."""
 import json
-import time
+from collections import OrderedDict
 from datetime import datetime, timezone, timedelta
 
-_waits = {}
+_waits = OrderedDict()
 
 
 def audit(stage, payload=None, event_id=None, **details):
@@ -19,12 +19,14 @@ def audit(stage, payload=None, event_id=None, **details):
 
 
 def audit_wait(stage, payload=None, event_id=None, **details):
-    """Repetir esperas como máximo una vez por minuto por evento/motivo."""
-    key = (stage, event_id, str(details))
-    now = time.monotonic()
-    if now - _waits.get(key, -1000) < 60:
+    """Registrar una espera al verla o al cambiar su motivo; no en cada sondeo."""
+    key = (stage, event_id, details.get("canal"))
+    reason = json.dumps(details, sort_keys=True, default=str)
+    if _waits.get(key) == reason:
+        _waits.move_to_end(key)
         return
-    if len(_waits) >= 2000:
-        _waits.clear()
-    _waits[key] = now
+    _waits[key] = reason
+    _waits.move_to_end(key)
+    if len(_waits) > 20000:
+        _waits.popitem(last=False)
     audit(stage, payload, event_id, **details)
