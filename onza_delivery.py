@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from decimal import Decimal
 
 import requests
 
-from onza_processing import TP_WEIGHTS, margin, pnl_piece
+from onza_processing import margin
 from bitunix_card import render_event_image as render_bitunix_event_image
 
 
@@ -34,24 +35,27 @@ def post_onza(payload: dict) -> tuple[str, str]:
     return "failed", f"HTTP {response.status_code}"
 
 
-def render_event_image(payload: dict, pnl_usd: Decimal, pnl_pct: Decimal) -> bytes:
-    return render_bitunix_event_image(payload, pnl_usd, pnl_pct)
+def render_event_image(payload: dict, pnl_usd: Decimal, pnl_pct: Decimal, *,
+                       image_sequence: int = 1, event_time: datetime | None = None) -> bytes:
+    return render_bitunix_event_image(
+        payload, pnl_usd, pnl_pct, image_sequence=image_sequence, event_time=event_time
+    )
 
 
 
 def _event_amount(payload: dict, trade: dict) -> tuple[Decimal, Decimal]:
+    """Rendimiento ilustrativo sobre el margen completo, sin cierres parciales."""
     entry = Decimal(str(payload["entry"]))
     price = Decimal(str(payload["price"]))
-    event = payload["typeSignal"]
-    if event.startswith("tp"):
-        fraction = TP_WEIGHTS[int(event[-1])]
-    else:
-        fraction = Decimal(1) - sum(
-            (TP_WEIGHTS[i] for i in (1, 2, 3) if trade[f"tp{i}_filled"]), Decimal(0)
-        )
     used_margin = Decimal(str(trade["margin_used"])) if trade.get("margin_used") is not None else margin()
-    amount = pnl_piece(payload["direction"], entry, price, payload["leverage"], used_margin, fraction)
-    return amount, amount / used_margin * 100
+    if entry <= 0 or used_margin <= 0 or int(payload["leverage"]) != 20:
+        raise ValueError("La imagen requiere entrada y margen positivos y apalancamiento 20X")
+    direction = str(payload["direction"]).upper()
+    if direction not in {"LONG", "SHORT"}:
+        raise ValueError("Dirección inválida")
+    movement = price - entry if direction == "LONG" else entry - price
+    percent = movement / entry * Decimal(20) * 100
+    return used_margin * percent / 100, percent
 
 
 def telegram_text(payload: dict) -> str:
@@ -73,7 +77,8 @@ def telegram_text(payload: dict) -> str:
             f"📍 Precio: {payload['price']}\nID: {payload['signalId']}")
 
 
-def post_telegram(payload: dict, trade: dict | None) -> tuple[str, str]:
+def post_telegram(payload: dict, trade: dict | None, *,
+                  image_sequence: int = 1, event_time: datetime | None = None) -> tuple[str, str]:
     token = os.getenv("TELEGRAM_BOT_TOKEN", "")
     channel = os.getenv("DESTINATION_CHANNEL_ID", "")
     if not token or not channel:
@@ -89,7 +94,10 @@ def post_telegram(payload: dict, trade: dict | None) -> tuple[str, str]:
             if trade is None:
                 return "failed", "Trade no encontrado para imagen"
             amount, percent = _event_amount(payload, trade)
-            picture = render_event_image(payload, amount, percent)
+            picture = render_event_image(
+                payload, amount, percent,
+                image_sequence=image_sequence, event_time=event_time,
+            )
             response = requests.post(
                 base + "/sendPhoto",
                 data={"chat_id": channel, "caption": telegram_text(payload)},
@@ -97,7 +105,7 @@ def post_telegram(payload: dict, trade: dict | None) -> tuple[str, str]:
             )
     except requests.Timeout:
         return "unknown", "Tiempo de espera agotado; revisar Telegram antes de reenviar"
-    except (requests.RequestException, OSError) as exc:
+    except (requests.RequestException, OSError, ValueError, KeyError) as exc:
         return "failed", type(exc).__name__
     if response.status_code == 200:
         return "delivered", "HTTP 200"

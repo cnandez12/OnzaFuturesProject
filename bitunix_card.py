@@ -1,4 +1,4 @@
-"""Tarjeta Bitunix limpia creada con datos del evento, sin capturas históricas."""
+"""Tarjetas Bitunix construidas con fondos limpios y rotación de diseños."""
 
 from __future__ import annotations
 
@@ -7,10 +7,24 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
+
+from onza_contract import internal_pair
 
 
-FONTS = Path(__file__).with_name("backend")
+ROOT = Path(__file__).resolve().parent
+ASSETS = ROOT / "assets" / "bitunix"
+BACKGROUNDS = ASSETS / "clean"
+CARD_TEMPLATES = ASSETS / "card_templates"
+LOGO = ROOT / "backend" / "assets" / "bitunix" / "bitunix-logo.png"
+FONTS = ROOT / "backend"
+DESIGN_COUNT = 25
+CANVAS = (1035, 1005)
+
+WHITE = (246, 246, 246)
+GRAY = (154, 154, 158)
+GREEN = (0, 194, 131)
+RED = (246, 83, 84)
 
 
 def font(bold: bool, size: int):
@@ -20,38 +34,103 @@ def font(bold: bool, size: int):
         return ImageFont.load_default()
 
 
-def render_event_image(payload: dict, pnl_usd: Decimal, pnl_pct: Decimal) -> bytes:
-    image = Image.new("RGB", (1035, 1005), (8, 11, 13))
+def design_number(image_sequence: int) -> int:
+    if not isinstance(image_sequence, int) or image_sequence < 1:
+        raise ValueError("image_sequence debe ser un entero positivo")
+    return (image_sequence - 1) % DESIGN_COUNT + 1
+
+
+def template_path(design: int, direction: str) -> Path:
+    if not 1 <= design <= DESIGN_COUNT or direction.upper() not in {"LONG", "SHORT"}:
+        raise ValueError("Diseño o dirección inválidos")
+    return CARD_TEMPLATES / f"card-{design:02d}-{direction.lower()}.jpg"
+
+
+def build_template_image(design: int, direction: str) -> Image.Image:
+    """Build a card with only permanent text; dynamic positions stay blank."""
+    if not 1 <= design <= DESIGN_COUNT or direction.upper() not in {"LONG", "SHORT"}:
+        raise ValueError("Diseño o dirección inválidos")
+    background_path = BACKGROUNDS / f"background-{design:02d}.png"
+    with Image.open(background_path) as source:
+        image = ImageOps.pad(source.convert("RGB"), CANVAS, color=(0, 0, 0), method=Image.Resampling.LANCZOS)
     draw = ImageDraw.Draw(image)
-    green, red, muted = (140, 236, 25), (255, 91, 105), (156, 166, 166)
-    accent = green if pnl_usd >= 0 else red
-    # Fondo geométrico original. Los JPEG de WhatsApp solo sirven como referencias.
-    draw.ellipse((615, 80, 1230, 695), outline=(27, 49, 27), width=5)
-    draw.ellipse((680, 145, 1165, 630), outline=(43, 77, 34), width=3)
-    draw.ellipse((750, 215, 1095, 560), outline=(82, 128, 42), width=2)
-    draw.polygon([(690, 650), (1035, 480), (1035, 850)], fill=(15, 30, 23))
-    draw.rectangle((0, 875, 1035, 1005), fill=(27, 31, 34))
-    draw.rounded_rectangle((62, 46, 89, 73), radius=6, fill=green)
-    draw.text((102, 41), "Bitunix", font=font(True, 37), fill=(246, 248, 245))
-    draw.text((65, 140), "ONZA FUTURES  /  BITUNIX", font=font(True, 25), fill=muted)
-    symbol = payload["symbol"].replace("USD.P", "USDT")
-    draw.text((65, 207), symbol, font=font(True, 43), fill=(246, 248, 245))
-    draw.text((65, 267), f"{payload['direction']}  |  {payload['leverage']}X  |  {payload['timeframe']}",
-              font=font(True, 28), fill=accent)
-    event = payload["typeSignal"]
-    label = {"tp1": "OBJETIVO 1", "tp2": "OBJETIVO 2", "tp3": "OBJETIVO 3",
-             "sl": "STOP LOSS", "close": "CIERRE POR SEÑAL"}.get(event, event.upper())
-    draw.text((65, 347), label, font=font(True, 28), fill=muted)
-    draw.text((58, 393), f"{pnl_pct:+.2f}%", font=font(True, 112), fill=accent)
-    draw.text((65, 543), f"{pnl_usd:+,.2f} USDT", font=font(True, 46), fill=accent)
-    draw.text((65, 655), "Precio de entrada", font=font(False, 25), fill=muted)
-    draw.text((382, 655), str(payload["entry"]), font=font(True, 27), fill=(246, 248, 245))
-    draw.text((65, 710), "Precio del evento", font=font(False, 25), fill=muted)
-    draw.text((382, 710), str(payload["price"]), font=font(True, 27), fill=(246, 248, 245))
-    draw.text((65, 793), "Resultado teórico de la señal", font=font(False, 24), fill=muted)
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    draw.text((65, 917), stamp, font=font(False, 24), fill=muted)
-    draw.text((590, 917), "Sin verificación de fill en Bitunix", font=font(False, 20), fill=muted)
+    draw.rectangle((0, 879, CANVAS[0], CANVAS[1]), fill=(32, 33, 36))
+    with Image.open(LOGO) as logo_source:
+        logo = logo_source.convert("RGBA")
+        image.paste(logo, (61, 74), logo)
+
+    draw.line(((290, 247), (290, 280)), fill=(90, 90, 94), width=2)
+    header_font = font(False, 43)
+    side = direction.title()
+    draw.text((310, 238), side, fill=GREEN if direction.upper() == "LONG" else RED, font=header_font)
+    draw.text((310 + draw.textlength(side, font=header_font) + 12, 238), "20X", fill=WHITE, font=header_font)
+    label_font = font(False, 35)
+    draw.text((60, 690), "Entry Price", fill=GRAY, font=label_font)
+    draw.text((60, 752), "Last Price", fill=GRAY, font=label_font)
+    return image
+
+
+def _fit_font(draw: ImageDraw.ImageDraw, value: str, max_width: int, start: int, minimum: int, *, bold: bool = False):
+    for size in range(start, minimum - 1, -1):
+        candidate = font(bold, size)
+        if draw.textlength(value, font=candidate) <= max_width:
+            return candidate
+    return font(bold, minimum)
+
+
+def _price(value) -> str:
+    return format(Decimal(str(value)), "f")
+
+
+def _timestamp(event_time: datetime | None) -> str:
+    stamp = event_time or datetime.now(timezone.utc)
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    return stamp.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
+
+
+def render_event_image(
+    payload: dict,
+    pnl_usd: Decimal,
+    pnl_pct: Decimal,
+    *,
+    image_sequence: int = 1,
+    event_time: datetime | None = None,
+) -> bytes:
+    """Fill live values on the next clean Long/Short 20X template."""
+    if int(payload["leverage"]) != 20:
+        raise ValueError("Las plantillas Bitunix de este proyecto requieren 20X")
+    direction = str(payload["direction"]).upper()
+    design = design_number(image_sequence)
+    with Image.open(template_path(design, direction)) as template:
+        image = template.convert("RGB")
+    draw = ImageDraw.Draw(image)
+    accent = GREEN if pnl_usd >= 0 else RED
+
+    symbol = internal_pair(payload["symbol"])
+    draw.text((60, 238), symbol, fill=WHITE,
+              font=_fit_font(draw, symbol, 220, 43, 22))
+
+    event = str(payload["typeSignal"]).lower()
+    if event not in {"tp1", "tp2", "tp3", "sl", "close"}:
+        raise ValueError("La tarjeta requiere TP1, TP2, TP3, SL o cierre")
+
+    percent_text = f"{pnl_pct:+.2f}%"
+    amount_text = f"{pnl_usd:+,.4f} USDT"
+    draw.text((56, 345), percent_text, fill=accent,
+              font=_fit_font(draw, percent_text, 480, 89, 51, bold=True))
+    draw.text((60, 456), amount_text, fill=accent,
+              font=_fit_font(draw, amount_text, 495, 41, 24))
+
+    entry_text = _price(payload["entry"])
+    price_text = _price(payload["price"])
+    draw.text((269, 690), entry_text, fill=WHITE,
+              font=_fit_font(draw, entry_text, 285, 36, 21))
+    draw.text((269, 752), price_text, fill=WHITE,
+              font=_fit_font(draw, price_text, 285, 36, 21))
+    draw.text((60, 920), _timestamp(event_time), fill=GRAY, font=font(False, 31))
+    draw.text((640, 927), "SIMULADO · SIN FILL BITUNIX", fill=GRAY, font=font(False, 15))
+
     output = io.BytesIO()
-    image.save(output, format="JPEG", quality=92)
+    image.save(output, format="JPEG", quality=93, optimize=True)
     return output.getvalue()

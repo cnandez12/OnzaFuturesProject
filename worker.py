@@ -134,7 +134,8 @@ def claim_delivery(channel: str):
     with connect() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
-                f"""SELECT id, signal_id, event_type, payload, onza_status, telegram_status
+                f"""SELECT id, signal_id, event_type, payload, received_at,
+                           onza_status, telegram_status
                     FROM tv_events WHERE {queue_filter}
                     ORDER BY id LIMIT 500 FOR UPDATE SKIP LOCKED"""
             )
@@ -172,9 +173,13 @@ def claim_delivery(channel: str):
                     )
                 else:
                     cur.execute(
-                        "UPDATE tv_events SET telegram_status='sending' WHERE id=%s",
+                        """UPDATE tv_events SET telegram_status='sending',
+                           image_sequence = CASE WHEN event_type='entry' THEN image_sequence
+                               ELSE COALESCE(image_sequence, nextval('bitunix_card_rotation_seq')) END
+                           WHERE id=%s RETURNING image_sequence""",
                         (event["id"],),
                     )
+                    image_sequence = cur.fetchone()["image_sequence"]
                 trade = None
                 if send_telegram and event["event_type"] != "entry":
                     cur.execute(
@@ -183,7 +188,8 @@ def claim_delivery(channel: str):
                         (event["signal_id"],),
                     )
                     trade = cur.fetchone()
-                return event["id"], event["payload"], send_onza, send_telegram, trade
+                return (event["id"], event["payload"], send_onza, send_telegram, trade,
+                        image_sequence if send_telegram else None, event.get("received_at"))
     return None
 
 
@@ -191,12 +197,14 @@ def deliver_one(channel: str) -> bool:
     claimed = claim_delivery(channel)
     if claimed is None:
         return False
-    event_id, payload, send_onza, send_telegram, trade = claimed
+    event_id, payload, send_onza, send_telegram, trade, image_sequence, event_time = claimed
     updates = {}
     if send_onza:
         updates["onza_status"], updates["onza_result"] = post_onza(payload)
     if send_telegram:
-        updates["telegram_status"], updates["telegram_result"] = post_telegram(payload, trade)
+        updates["telegram_status"], updates["telegram_result"] = post_telegram(
+            payload, trade, image_sequence=image_sequence or 1, event_time=event_time
+        )
     try:
         with connect() as conn:
             with conn.cursor() as cur:

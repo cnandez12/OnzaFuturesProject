@@ -26,6 +26,13 @@ class Cursor:
             return [self.event]
         return []
 
+    def fetchone(self):
+        if "RETURNING image_sequence" in self.current:
+            return {"image_sequence": None if self.event["event_type"] == "entry" else 1}
+        if "FROM trades" in self.current:
+            return {"margin_used": 20}
+        return None
+
 
 class Connection:
     def __init__(self, cursor):
@@ -70,6 +77,17 @@ class WorkerPriorityTests(unittest.TestCase):
         self.assertTrue(claimed[2])
         self.assertFalse(claimed[3])
         self.assertIn("state IN ('pending', 'applied') AND onza_status='pending'", cursor.sql[0])
+
+    def test_result_claim_assigns_persistent_image_sequence(self):
+        event = {"id": 8, "signal_id": "s", "event_type": "tp1",
+                 "payload": {}, "onza_status": "delivered", "telegram_status": "pending"}
+        cursor = Cursor(event)
+        with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test", "DESTINATION_CHANNEL_ID": "-1"}), \
+             patch.object(worker, "connect", return_value=Connection(cursor)):
+            claimed = worker.claim_delivery("telegram")
+        self.assertEqual(claimed[5], 1)
+        self.assertTrue(any("COALESCE(image_sequence, nextval('bitunix_card_rotation_seq'))" in sql
+                            for sql in cursor.sql))
 
 
 if __name__ == "__main__":

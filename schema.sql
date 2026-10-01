@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS tv_events (
     onza_started_at TIMESTAMPTZ,
     onza_finished_at TIMESTAMPTZ,
     telegram_status TEXT NOT NULL DEFAULT 'pending',
+    image_sequence BIGINT,
     onza_result TEXT,
     telegram_result TEXT,
     error TEXT,
@@ -93,6 +94,8 @@ CREATE TABLE IF NOT EXISTS tv_events (
 );
 ALTER TABLE tv_events ADD COLUMN IF NOT EXISTS onza_started_at TIMESTAMPTZ;
 ALTER TABLE tv_events ADD COLUMN IF NOT EXISTS onza_finished_at TIMESTAMPTZ;
+ALTER TABLE tv_events ADD COLUMN IF NOT EXISTS image_sequence BIGINT;
+CREATE SEQUENCE IF NOT EXISTS bitunix_card_rotation_seq;
 
 CREATE INDEX IF NOT EXISTS idx_tv_events_pending ON tv_events (id) WHERE state = 'pending';
 CREATE INDEX IF NOT EXISTS idx_tv_events_delivery ON tv_events (id) WHERE state = 'applied';

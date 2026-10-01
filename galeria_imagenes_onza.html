@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Galería de imágenes · Onza Futures Project</title>
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;background:#0b111a;color:#f0f5fa}
+    body{max-width:1350px;margin:auto;padding:26px}h1{font-size:clamp(27px,4vw,39px);margin-bottom:5px}h2{margin-top:35px}
+    p{color:#b4c2d1;line-height:1.5}a{color:#8ecbff}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+    figure{margin:0;padding:12px;border:1px solid #2b3b4b;border-radius:14px;background:#15202c}
+    figure img{display:block;width:100%;height:270px;object-fit:contain;background:#090d12;border-radius:8px}
+    figcaption{margin-top:9px;color:#d6e2ef;font-size:14px}small{display:block;color:#8e9ead;overflow-wrap:anywhere;margin-top:4px}
+    .notice{background:#182a35;border-left:4px solid #86d6b7;padding:13px 16px;border-radius:8px}
+  </style>
+</head>
+<body>
+  <h1>Imágenes del proyecto Onza Futures</h1>
+  <p class="notice">50 plantillas limpias: 25 diseños Long 20X y 25 Short 20X. Cada evento genera una imagen con el movimiento entre Entry Price y Last Price a 20X, calculado sobre el margen completo, sin ponderar parciales. La imagen no lleva etiquetas TP/SL ni el texto UTC. Los diseños rotan del 01 al 25. Las capturas originales siguen abajo como referencia.</p>
+  <h2>Ejemplos con datos simulados</h2><div class="grid" id="previews"></div>
+  <h2>25 plantillas Long 20X</h2><div class="grid" id="long"></div>
+  <h2>25 plantillas Short 20X</h2><div class="grid" id="short"></div>
+  <h2>25 capturas Bitunix de referencia</h2><div class="grid" id="references"></div>
+  <h2>Otros recursos incluidos en la copia</h2>
+  <p>Estos archivos pertenecen a los módulos heredados del servidor de imágenes y al generador del canal libre. La tarjeta actual de Onza se crea en <code>bitunix_card.py</code>.</p>
+  <div class="grid" id="other"></div>
+  <script>
+    const sections={
+      previews:['tp1','tp2','tp3','sl'].map(kind=>[`assets/bitunix/preview-${kind}-short.jpg`,`${kind.toUpperCase()} · Ejemplo Short 20X`]),
+      long:Array.from({length:25},(_,i)=>{const n=String(i+1).padStart(2,'0');return [`assets/bitunix/card_templates/card-${n}-long.jpg`,`Diseño ${n} · Long 20X`]}),
+      short:Array.from({length:25},(_,i)=>{const n=String(i+1).padStart(2,'0');return [`assets/bitunix/card_templates/card-${n}-short.jpg`,`Diseño ${n} · Short 20X`]}),
+      references:Array.from({length:25},(_,i)=>{const n=String(i+1).padStart(2,'0');return [`assets/bitunix/references/bitunix-referencia-${n}.jpg`,`Referencia Bitunix ${n}`]}),
+      other:[
+        ['backend/assets/bitunix/references/bitunix-reference-1.jpeg','Referencia adicional 1'],
+        ['backend/assets/bitunix/references/bitunix-reference-2.jpeg','Referencia adicional 2'],
+        ['backend/assets/bitunix/references/bitunix-reference-3.jpeg','Referencia adicional 3'],
+        ['backend/assets/bitunix/templates/tom.png','Plantilla Tom'],
+        ['backend/assets/bitunix/templates/spider.png','Plantilla Spider'],
+        ['backend/assets/bitunix/templates/knight.png','Plantilla Knight'],
+        ['backend/assets/bitunix/templates/bear.png','Plantilla Bear'],
+        ['backend/assets/bitunix/bitunix-logo.png','Logo Bitunix'],
+        ['backend/long.jpg','Fondo heredado LONG'],
+        ['backend/short.jpg','Fondo heredado SHORT']
+      ]
+    };
+    for(const [id,images] of Object.entries(sections)){
+      const root=document.getElementById(id);
+      for(const [path,title] of images){
+        const figure=document.createElement('figure');
+        const link=document.createElement('a');link.href=path;link.target='_blank';
+        const img=document.createElement('img');img.src=path;img.alt=title;img.loading='lazy';
+        const caption=document.createElement('figcaption');caption.textContent=title;
+        const detail=document.createElement('small');detail.textContent=path;
+        caption.append(detail);link.append(img);figure.append(link,caption);root.append(figure);
+      }
+    }
+  </script>
+</body>
+</html>
