@@ -1108,17 +1108,17 @@ function fbTickCountdown() {
   fbUpdateDeltaPnl();
 }
 
-/* % NETO en vivo de la operación abierta (igual que la tarjeta de En vivo):
-   (pnl_accumulated + flotante) / margen × 100, descontando los TP ya tocados. */
+/* ROI actual desde la entrada hasta el mark price vigente.
+   Independiente del máximo TP usado por el historial y el balance. */
 function fbOpenNetPct(sig, mark) {
-  const pnl = openPositionPnl({
-    entry: sig.entry_price, direction: sig.direction,
-    margin_used: sig.margin_used, leverage: sig.leverage,
-    tp1_filled: sig.hit_tp1, tp2_filled: sig.hit_tp2,
-    tp1: sig.tp1, tp2: sig.tp2, tp3: sig.tp3,
-    pnl_accumulated: sig.pnl_accumulated,
-  }, mark);
-  return pnl ? pnl.netPct : null;
+  const entry = Number(sig.entry_price);
+  const price = Number(mark);
+  const leverage = Number(sig.leverage);
+  const direction = String(sig.direction || '').toUpperCase();
+  if (![entry, price, leverage].every(Number.isFinite) ||
+      entry <= 0 || price <= 0 || leverage <= 0 ||
+      !['LONG', 'SHORT'].includes(direction)) return null;
+  return (direction === 'LONG' ? price - entry : entry - price) / entry * leverage * 100;
 }
 
 function fbUpdateDeltaPnl() {
@@ -1127,15 +1127,6 @@ function fbUpdateDeltaPnl() {
   if (!sig || !fbState.data.length || !fbCandles) { fbState._dpnl = null; fbPositionDeltaPnl(); return; }
 
   const lastBar = fbState.data[fbState.data.length-1];
-
-  // Precio mostrado (HA-aware) para la Y — se calcula solo en el tick, no por frame
-  let dispClose;
-  if (fbState.chartType === 'heikinashi') {
-    const ha = fbToHeikinAshi(fbState.data);
-    dispClose = ha[ha.length-1].close;
-  } else {
-    dispClose = lastBar.close;
-  }
 
   const freshMark = lastMarkFetchAt && Date.now() - lastMarkFetchAt < 15000
     ? liveMarkPrices['BITUNIX:' + fbState.symbol.replace('/', '')] : null;
@@ -1151,7 +1142,8 @@ function fbUpdateDeltaPnl() {
   document.getElementById('fb-dpnl-pct').textContent = (pos ? '+' : '') + net.toFixed(2) + '%';
 
   // Cache para que el rAF lo reposicione cada frame (scroll/zoom fluido, sin saltos)
-  fbState._dpnl = { time: lastBar.time, price: dispClose };
+  // La posición vertical usa el mismo precio que el ROI, incluso en Heikin Ashi.
+  fbState._dpnl = { time: lastBar.time, price: Number(freshMark) };
   fbPositionDeltaPnl();
 }
 
