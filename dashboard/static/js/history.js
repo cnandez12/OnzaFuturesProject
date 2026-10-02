@@ -73,7 +73,7 @@ function renderHistory() {
       <td class="col-fill" style="color:${t.hit_tp3?'var(--green)':'var(--text3)'}">${t3Text}</td>
       <td style="color:${p>=0?'var(--green)':'var(--red)'};font-weight:700">${p>=0?'+':''}${p.toFixed(2)}%</td>
       <td style="color:${u>=0?'var(--green)':'var(--red)'};font-weight:600">${u>=0?'+':'-'}$${Math.abs(u).toFixed(2)}</td>
-      <td><span class="badge ${reasonClass(t.close_reason)}">${fmtScenario(t)}</span></td>
+      <td><span class="badge ${tradeResultClass(t)}">${fmtScenario(t)}</span></td>
       <td class="col-dur" style="color:var(--text3);font-size:12px">${t.duration||'—'}</td>
       <td class="col-bal" style="color:var(--text2);font-weight:600">$${b.toFixed(2)}</td>
       <td class="col-date" style="color:var(--text3);font-size:11px;white-space:nowrap">${dt}</td>
@@ -98,7 +98,7 @@ function renderHistory() {
       <div class="hist-card-top">
         <span class="hist-card-sym">${esc(t.symbol)} <small style="color:var(--text3)">${t.source==='reconstructed'?'Reconstruido':'TradingView'}</small></span>
         <span class="badge b-${esc((t.direction||'').toLowerCase())}">${esc(t.direction)}</span>
-        <span class="badge ${reasonClass(t.close_reason)}" style="font-size:10px">${esc(fmtScenario(t))}</span>
+        <span class="badge ${tradeResultClass(t)}" style="font-size:10px">${esc(fmtScenario(t))}</span>
         <span class="hist-card-pnl" style="color:${col}">${p>=0?'+':''}${p.toFixed(1)}%</span>
       </div>
       <div class="hist-card-body">

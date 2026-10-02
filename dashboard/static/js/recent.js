@@ -25,7 +25,7 @@ function renderRecent() {
       <td><span class="badge b-${esc((t.direction||'').toLowerCase())}">${esc(t.direction)}</span></td>
       <td style="color:${p>=0?'var(--green)':'var(--red)'};font-weight:700">${p>=0?'+':''}${p.toFixed(2)}%</td>
       <td style="color:${u>=0?'var(--green)':'var(--red)'}; font-weight:600">${u>=0?'+':'-'}$${Math.abs(u).toFixed(2)}</td>
-      <td><span class="badge ${reasonClass(t.close_reason)}">${fmtScenario(t)}</span></td>
+      <td><span class="badge ${tradeResultClass(t)}">${fmtScenario(t)}</span></td>
       <td style="color:var(--text2);font-weight:600">$${b.toFixed(2)}</td>
       <td style="color:var(--text3);font-size:12px">${dt}</td>
     </tr>`;
@@ -41,7 +41,7 @@ function renderRecent() {
       <span class="ov-tc-dir"><span class="badge b-${esc((t.direction||'').toLowerCase())}">${esc(t.direction)}</span></span>
       <span class="ov-tc-pnl" style="color:${col}">${p>=0?'+':''}${p.toFixed(1)}%</span>
       <span class="ov-tc-usdt" style="color:${col}">${u>=0?'+':'-'}$${Math.abs(u).toFixed(2)}</span>
-      <span class="ov-tc-badge"><span class="badge ${reasonClass(t.close_reason)}" style="font-size:10px">${fmtScenario(t)}</span></span>
+      <span class="ov-tc-badge"><span class="badge ${tradeResultClass(t)}" style="font-size:10px">${fmtScenario(t)}</span></span>
     </div>`;
   }).join('');
 }

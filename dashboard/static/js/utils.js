@@ -38,6 +38,11 @@ const REASON_LABELS = {
 
 function fmtReason(r) { return REASON_LABELS[r] || r || '—'; }
 
+function tradeResultClass(t) {
+  const shown = fmtScenario(t);
+  return reasonClass(["TP1", "TP2", "TP3"].includes(shown) ? shown : t.close_reason);
+}
+
 function reasonClass(r) {
   if (!r) return '';
   if (r === 'TP_FORCED' || r === 'Closed') return 'b-closed';
@@ -82,7 +87,7 @@ function fmtScenario(t) {
 /* ── Scenario color mapping ────────────────────────────────────────────── */
 
 const SCENARIO_COLORS = {
-  TP1: "var(--green)", TP2: "var(--green)", TP3: "var(--green)",
+  TP1: "#a7e8c5", TP2: "#57db9a", TP3: "#00ed91",
   'TP1 + TP2 + TP3':    'var(--green)',
   'TP1 + TP2 + Closed': '#37f4b0',
   'TP1 + Closed':       '#7fffd0',
