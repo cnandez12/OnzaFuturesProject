@@ -111,3 +111,20 @@ CREATE INDEX IF NOT EXISTS idx_sim_track_closed_at ON sim_track_record (closed_a
 CREATE TABLE IF NOT EXISTS daily_profits (key VARCHAR PRIMARY KEY, value TEXT, gain_date TIMESTAMPTZ, Close BOOLEAN DEFAULT FALSE);
 CREATE TABLE IF NOT EXISTS weekly_profits (key VARCHAR PRIMARY KEY, value TEXT, gain_date TIMESTAMPTZ, Close BOOLEAN DEFAULT FALSE);
 CREATE TABLE IF NOT EXISTS monthly_profits (key VARCHAR PRIMARY KEY, value TEXT, gain_date TIMESTAMPTZ, Close BOOLEAN DEFAULT FALSE);
+
+-- Independent durable Telegram distribution; never blocks the Onza webhook.
+CREATE TABLE IF NOT EXISTS telegram_channel_state (name TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS telegram_free_selections (
+    signal_id TEXT NOT NULL, chat_id TEXT NOT NULL, week_start DATE NOT NULL,
+    PRIMARY KEY (signal_id, chat_id)
+);
+CREATE TABLE IF NOT EXISTS telegram_free_seen (
+    event_id BIGINT NOT NULL, chat_id TEXT NOT NULL, PRIMARY KEY (event_id,chat_id)
+);
+CREATE TABLE IF NOT EXISTS telegram_publications (
+    id BIGSERIAL PRIMARY KEY, job_key TEXT UNIQUE NOT NULL, chat_id TEXT NOT NULL,
+    method TEXT NOT NULL, body JSONB NOT NULL, parent_key TEXT, requires_key TEXT,
+    pin_after BOOLEAN NOT NULL DEFAULT FALSE, status TEXT NOT NULL DEFAULT 'pending',
+    message_id BIGINT, detail TEXT, available_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_telegram_publications_pending ON telegram_publications(id) WHERE status='pending';

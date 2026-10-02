@@ -9,7 +9,9 @@ from psycopg2 import sql
 from dotenv import load_dotenv
 
 TABLES = ("tv_events", "tv_signals", "trades", "sim_track_record",
-          "daily_profits", "weekly_profits", "monthly_profits")
+          "daily_profits", "weekly_profits", "monthly_profits",
+          "telegram_channel_state", "telegram_free_selections", "telegram_free_seen",
+          "telegram_publications")
 
 
 def reset_database(conn, *, workers_stopped=False):

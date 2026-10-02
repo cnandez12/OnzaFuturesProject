@@ -1,6 +1,21 @@
 # Despliegue de Onza Futures Project en Railway
 
-Esta carpeta aún no está desplegada. No contiene las claves ni el dominio de producción. El proyecto de Smart Crypto Signals original no se usa como origen.
+El despliegue de Onza es independiente del proyecto Smart Crypto Signals original. Las claves se configuran en Railway.
+
+## Canal Free y cierre diario
+
+`python worker.py telegram` inicia y supervisa también `telegram_channels.py` como proceso independiente. Funciona tanto con `bash start.sh` como con el servicio Telegram separado, sin cambiar comandos ni crear más servicios. `setup_db.py` aplica las tablas nuevas al desplegar el servicio web. El subproceso hereda la misma `DATABASE_URL`, `TELEGRAM_BOT_TOKEN` y `DESTINATION_CHANNEL_ID`.
+
+- Canal Free por defecto autorizado: `-1004466702211`. `FREE_CHANNEL_ID` permite sustituirlo; un valor vacío desactiva nuevas publicaciones Free. No reutiliza el destino del bot anterior.
+- El bot actual debe ser administrador del Free con permiso de publicar. En el canal principal necesita también permiso para fijar mensajes (editar mensajes en canales).
+- Hasta tres entradas por semana, lunes a domingo de Colombia. Conserva el filtro anterior: entre los últimos ocho cierres, dirección con al menos dos resultados positivos y suma positiva; empates no seleccionan. `ONZA_FREE_BLACKLIST` opcional, símbolos separados por comas. Las entradas ya avanzadas no se ofrecen como nuevas.
+- Seguimiento en inglés en respuesta a la entrada Free. Todos los TP2/TP3 elegibles del principal se copian con caption inglés, incluidos los no seleccionados. `copyMessage` conserva la imagen pero no el encabezado nativo de reenvío; el caption identifica el canal principal. Todas las publicaciones incluyen el enlace Onza.
+- Al iniciar por primera vez se fija una frontera persistente: no se republica el historial anterior del Free. El cupo y los mensajes se guardan en la misma base PostgreSQL.
+- Resumen desde las 00:00 de Colombia para el día completo anterior, con recuperación de días pendientes tras reinicios. Solo operaciones con `closed_at` en ese día. Primer resumen: al terminar el día de activación.
+- Cada operación aparece una vez con su mayor TP y ROI sobre margen completo; SL solo sin TP. Un cierre por señal opuesta sin TP se identifica como CLOSE. La suma de ROI por señal no representa rentabilidad real de cuenta. El dashboard y sus escenarios no cambian.
+- Se publica y fija en español en el principal; se publica su versión inglesa en el Free después de confirmar la publicación principal. Solo se desfija el resumen anterior gestionado por este módulo. Informes largos se dividen y se fija el último bloque de resumen.
+- Cola durable `telegram_publications`, selección `telegram_free_selections`, deduplicación `telegram_free_seen`, calendario `telegram_channel_state`. No bloquean el envío a Onza. Timeouts ambiguos no se reintentan: revisar `unknown`/`sending` antes de reenviar manualmente. Un rechazo confirmado queda `failed`; tras corregir permisos puede volver a `pending` mediante intervención operativa. Los 429 se reintentan con espera.
+- Los logs `TELEGRAM DISTRIBUCION` incluyen canal, publicación, estado y confirmación. Las pruebas no realizan envíos reales a Telegram.
 
 ## Flujo prioritario
 

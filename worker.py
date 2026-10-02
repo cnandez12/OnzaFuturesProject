@@ -10,6 +10,10 @@ import os
 import select
 import sys
 import time
+import atexit
+import signal
+import subprocess
+from pathlib import Path
 from decimal import Decimal
 from datetime import datetime, timezone
 
@@ -279,9 +283,26 @@ def main():
     if role not in ("onza", "process", "telegram"):
         raise SystemExit("Uso: worker.py [onza|process|telegram]")
     listener = None
+    distribution = None
+    if role == "telegram":
+        def cleanup_distribution():
+            if distribution is not None and distribution.poll() is None:
+                distribution.terminate()
+                try:
+                    distribution.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    distribution.kill()
+                    distribution.wait()
+        atexit.register(cleanup_distribution)
+        def stop_worker(_signum, _frame):
+            raise SystemExit(0)
+        signal.signal(signal.SIGTERM, stop_worker)
     audit("WORKER INICIADO", canal=role)
     while True:
         try:
+            if role == "telegram" and (distribution is None or distribution.poll() is not None):
+                distribution = subprocess.Popen([sys.executable, str(Path(__file__).with_name("telegram_channels.py"))])
+                audit("TELEGRAM DISTRIBUCION INICIADA")
             if role == "onza" and listener is None:
                 listener = listen_onza()
             applied = apply_pending() if role == "process" else 0
