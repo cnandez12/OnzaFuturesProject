@@ -31,7 +31,7 @@ function renderOverviewBalanceChart() {
   set('overview-chart-change', (delta >= 0 ? '+' : '-') + '$' + Math.abs(delta).toFixed(2) + ' acumulado');
   const change = el('overview-chart-change');
   if (change) change.style.color = delta >= 0 ? 'var(--green)' : 'var(--red)';
-  set('overview-chart-sub', chronological.length + ' cierres simulados registrados');
+  set('overview-chart-sub', chronological.length + ' cierres · escenario de máximo TP');
 
   if (chOverview) chOverview.destroy();
   const ctx = canvas.getContext('2d');
@@ -76,11 +76,13 @@ function renderOverviewOpenSignals() {
     const mark = lastMarkFetchAt && Date.now()-lastMarkFetchAt < 20000 ? liveMarkPrices['BITUNIX:' + symbol] : null;
     const pnl = calcOpenPnl(p, mark);
     const accumulated = Number(p.pnl_accumulated || 0);
-    const net = pnl && pnl.net !== null ? pnl.net : accumulated;
-    const netPct = pnl && pnl.netPct !== null ? pnl.netPct : (Number(p.margin_used) ? accumulated/Number(p.margin_used)*100 : 0);
+    const target = p.tp2_filled ? Number(p.tp2) : p.tp1_filled ? Number(p.tp1) : null;
+    const highestPct = target ? (isLong ? target-Number(p.entry) : Number(p.entry)-target)/Number(p.entry)*Number(p.leverage)*100 : null;
+    const net = highestPct !== null ? highestPct * Number(p.margin_used)/100 : pnl && pnl.net !== null ? pnl.net : accumulated;
+    const netPct = highestPct !== null ? highestPct : pnl && pnl.netPct !== null ? pnl.netPct : (Number(p.margin_used) ? accumulated/Number(p.margin_used)*100 : 0);
     const tp1 = Boolean(p.tp1_filled), tp2 = Boolean(p.tp2_filled);
     const be = Boolean(p.be_active);
-    const state = tp2 ? 'TP1 + TP2 vendidos' : tp1 ? 'TP1 vendido' : 'Riesgo abierto';
+    const state = tp2 ? 'Máximo TP2' : tp1 ? 'Máximo TP1' : 'Riesgo abierto';
     const protect = be ? ' · BE activo' : '';
     return `<div class="mission-open-row" data-pair="${safePair}" onclick="fbOpenSymbol(this.dataset.pair)" title="Abrir ${safePair} en el chart">
       <div class="mission-open-main"><span class="mission-open-symbol">${safePair}</span><span class="mission-dir ${isLong?'long':'short'}">${isLong?'LONG':'SHORT'}</span></div>

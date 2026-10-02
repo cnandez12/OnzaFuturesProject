@@ -50,6 +50,11 @@ function reasonClass(r) {
  * Accepts both trade objects (close_reason) and simulator logRow objects (reason).
  */
 function fmtScenario(t) {
+  if (t.display_mode === "max_tp") {
+    if (t.hit_tp3) return "TP3";
+    if (t.hit_tp2) return "TP2";
+    if (t.hit_tp1) return "TP1";
+  }
   const tp1 = t.hit_tp1 || false;
   const tp2 = t.hit_tp2 || false;
   const raw = t.close_reason || t.reason || '';
@@ -77,6 +82,7 @@ function fmtScenario(t) {
 /* ── Scenario color mapping ────────────────────────────────────────────── */
 
 const SCENARIO_COLORS = {
+  TP1: "var(--green)", TP2: "var(--green)", TP3: "var(--green)",
   'TP1 + TP2 + TP3':    'var(--green)',
   'TP1 + TP2 + Closed': '#37f4b0',
   'TP1 + Closed':       '#7fffd0',

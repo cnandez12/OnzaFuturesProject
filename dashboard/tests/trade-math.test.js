@@ -32,12 +32,12 @@ test('recorded P&L remains authoritative when an old row cannot reconcile', () =
   close(tradeScenario(t,[.2,.4,.4]).rate * 400, 96);
   close(tradeScenario(t,[.4,.4,.2]).discrepancy, -8);
 });
-test('open position combines realized TP with mark-priced remaining quantity', () => {
-  const p = {entry:100,direction:'LONG',margin_used:20,leverage:20,tp1_filled:true,tp2_filled:false,pnl_accumulated:16};
+test('open position keeps highest TP despite price retracement', () => {
+  const p = {entry:100,direction:'LONG',margin_used:20,leverage:20,tp1:110,tp1_filled:true,tp2_filled:false,pnl_accumulated:16};
   const r = openPositionPnl(p,105);
-  close(r.accumulated,16);close(r.floating,12);close(r.net,28);close(r.netPct,140);
+  close(r.accumulated,40);close(r.floating,20);close(r.net,40);close(r.netPct,200);
   const stale = openPositionPnl(p,null);
-  close(stale.accumulated,16);assert.equal(stale.floating,null);assert.equal(stale.net,null);
+  close(stale.accumulated,40);assert.equal(stale.floating,null);close(stale.net,40);
 });
 
 test('SHORT legs reverse price direction without changing sold fractions', () => {
@@ -46,8 +46,8 @@ test('SHORT legs reverse price direction without changing sold fractions', () =>
     hit_tp3:false, exit_price:110, close_reason:'SL', final_profit_usdt:40};
   close(tradeScenario(t,[.4,.4,.2]).rate * 400, 40);
   const open = openPositionPnl({entry:100,direction:'SHORT',margin_used:20,leverage:20,
-    tp1_filled:true,tp2_filled:false,pnl_accumulated:16},95);
-  close(open.floating,12);close(open.net,28);
+    tp1:90,tp1_filled:true,tp2_filled:false,pnl_accumulated:16},95);
+  close(open.floating,20);close(open.net,40);
 });
 
 test('historical unweighted TP fields do not alter weighted TP display', () => {
@@ -55,4 +55,9 @@ test('historical unweighted TP fields do not alter weighted TP display', () => {
   close(tradeTpContributionPct(legacy,0),80);
   close(tradeTpContributionPct(legacy,1),160);
   close(tradeTpContributionPct(legacy,2),120);
+});
+
+test('simulator uses preserved accounting instead of dashboard max TP profit', () => {
+  const t = {...base, final_profit_usdt:120, recorded_final_profit_usdt:72};
+  close(tradeScenario(t,[.4,.4,.2]).rate * 400,72);
 });

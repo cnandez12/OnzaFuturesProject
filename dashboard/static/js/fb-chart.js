@@ -1115,6 +1115,7 @@ function fbOpenNetPct(sig, mark) {
     entry: sig.entry_price, direction: sig.direction,
     margin_used: sig.margin_used, leverage: sig.leverage,
     tp1_filled: sig.hit_tp1, tp2_filled: sig.hit_tp2,
+    tp1: sig.tp1, tp2: sig.tp2, tp3: sig.tp3,
     pnl_accumulated: sig.pnl_accumulated,
   }, mark);
   return pnl ? pnl.netPct : null;

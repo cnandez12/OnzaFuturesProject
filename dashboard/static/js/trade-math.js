@@ -36,7 +36,7 @@ function tradePriceModel(t, weights) {
 
 function tradeScenario(t, weights) {
   const originalNotional = Number(t.margin_used) * Number(t.leverage);
-  const recordedUsdt = Number(t.final_profit_usdt);
+  const recordedUsdt = Number(t.recorded_final_profit_usdt ?? t.final_profit_usdt);
   const original = tradePriceModel(t, RECORDED_TP_SPLIT);
   const proposed = tradePriceModel(t, weights);
   if (!(originalNotional > 0) || !Number.isFinite(recordedUsdt)) return null;
@@ -61,22 +61,24 @@ function openPositionPnl(p, markPrice) {
   const accumulated = Number(p.pnl_accumulated || 0);
   const direction = String(p.direction || '').toUpperCase();
   if (!(entry > 0) || !(margin > 0) || !(leverage > 0) || !Number.isFinite(accumulated)) return null;
-  const remaining = Math.max(0, 1 - (p.tp1_filled ? .4 : 0) - (p.tp2_filled ? .4 : 0));
   const mark = Number(markPrice);
-  const floating = mark > 0 && ['LONG', 'SHORT'].includes(direction)
-    ? (direction === 'LONG' ? mark - entry : entry - mark) * (margin * leverage / entry) * remaining
-    : null;
-  return {
-    margin,
-    accumulated,
-    floating,
-    net: floating === null ? null : accumulated + floating,
-    floatingPct: floating === null ? null : floating / margin * 100,
-    netPct: floating === null ? null : (accumulated + floating) / margin * 100,
-  };
+  const sign = direction === 'LONG' ? 1 : -1;
+  const highest = p.tp3_filled ? Number(p.tp3) : p.tp2_filled ? Number(p.tp2) : p.tp1_filled ? Number(p.tp1) : null;
+  const highestUsdt = highest ? sign * (highest-entry)/entry*margin*leverage : 0;
+  const floating = mark > 0 ? sign*(mark-entry)/entry*margin*leverage : null;
+  const net = highest ? highestUsdt : floating;
+  return {margin, accumulated: highestUsdt, floating, net,
+    floatingPct: floating === null ? null : floating/margin*100,
+    netPct: net === null ? null : net/margin*100};
 }
 
 function tradeTpContributionPct(t, index) {
+  if (t.display_mode === "max_tp") {
+    const n = index + 1;
+    if (!t[`hit_tp${n}`]) return null;
+    const price = Number(t[`tp${n}_exit_price`] || t[`tp${n}`]);
+    return (t.direction === "LONG" ? 1 : -1) * (price-Number(t.entry_price))/Number(t.entry_price)*Number(t.leverage)*100;
+  }
   const model = tradePriceModel(t, RECORDED_TP_SPLIT);
   const leverage = Number(t.leverage);
   if (!model || !model.legs[index] || !(leverage > 0)) return null;

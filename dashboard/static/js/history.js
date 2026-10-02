@@ -15,6 +15,10 @@ function renderHistory() {
   if (source) f = f.filter(t => t.source === source);
   if (dir)    f = f.filter(t => t.direction === dir);
   if (reason) f = f.filter(t => {
+    if (t.display_mode === "max_tp") {
+      const result = fmtScenario(t);
+      return result === reason || (result === "SL Directo" && reason === "SL");
+    }
     const r = fmtReason(t.close_reason);
     return r === reason || t.close_reason === reason;
   });

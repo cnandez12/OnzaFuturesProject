@@ -129,3 +129,8 @@ El script reconcilia cada mes, valida que el producto de retornos llegue al bala
 '## Scripts de mantenimiento
 
 `BackfillSignals.py` requiere `DATABASE_URL` y funciona en modo de prueba por defecto. Solo inserta datos si se establece `BACKFILL_APPLY=true` explícitamente. `backup_db.py` requiere `SOURCE_DATABASE_URL` y `DEST_DATABASE_URL` en el entorno. Las credenciales que existían en versiones anteriores del repositorio deben rotarse en los servicios correspondientes; quitarlas del archivo actual no las borra del historial Git.
+
+
+## Vista principal: máximo TP
+
+Las consultas financieras del dashboard usan una proyección de solo lectura (`dashboard/max_tp.py`). Para cada cierre se valora el precio del TP más alto registrado con el margen completo de la operación; sin TP se conserva el precio de salida. Balance, curva, estadísticas e historial usan esa proyección. Los datos persistidos y los eventos no cambian. El historial incluye `recorded_final_profit_usdt` para que el simulador conserve su base original; Auditoría sigue leyendo los eventos sin esta proyección. Las posiciones abiertas muestran el máximo TP registrado y el movimiento de mercado por separado; el balance se abona al cierre.

@@ -8,6 +8,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from datetime import datetime, date
 import json
+from dashboard.max_tp import project_sql
 
 load_dotenv()
 
@@ -81,6 +82,7 @@ def query(sql, params=(), fetch_all=False, fetch_one=False):
     try:
         conn = db_pool.getconn()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            sql, params = project_sql(sql, params, INITIAL_BALANCE)
             cur.execute(sql, params)
             if fetch_all:
                 return cur.fetchall()
@@ -151,6 +153,8 @@ def rows_to_list(rows):
     result = []
     for row in rows:
         d = dict(row)
+        if "final_profit_usdt" in d:
+            d["display_mode"] = "max_tp"
         for k, v in d.items():
             if hasattr(v, '__float__'):
                 d[k] = float(v)
@@ -199,7 +203,7 @@ def api_history():
                hit_tp1, hit_tp2, hit_tp3,
                tp1_exit_price, tp2_exit_price, tp3_exit_price,
                tp1_profit_pct, tp2_profit_pct, tp3_profit_pct, final_profit_pct,
-               final_profit_usdt, close_reason,
+               final_profit_usdt, close_reason, recorded_final_profit_usdt, recorded_final_profit_pct,
                balance_before,
                (%s + SUM(COALESCE(final_profit_usdt, 0))
                        OVER (ORDER BY closed_at ASC, id ASC)) AS balance_after,
@@ -297,7 +301,7 @@ def api_open():
     rows = query(
         """
         SELECT message_id AS id, pair, side AS direction, source_exchange,
-               %s AS margin_used, leverage,
+               COALESCE((SELECT margin_used FROM tv_signals WHERE id=trades.message_id), %s) AS margin_used, leverage,
                entry, stop_loss, tp1, tp2, tp3,
                tp1_filled, tp2_filled, tp3_filled, date,
                be_active,
@@ -474,7 +478,7 @@ def api_chart_signals():
     open_trades = query(
         """
         SELECT message_id AS id, pair AS symbol, side AS direction,
-               %s AS margin_used, leverage,
+               COALESCE((SELECT margin_used FROM tv_signals WHERE id=trades.message_id), %s) AS margin_used, leverage,
                entry AS entry_price, stop_loss,
                tp1, tp2, tp3,
                tp1_filled AS hit_tp1, tp2_filled AS hit_tp2, tp3_filled AS hit_tp3,

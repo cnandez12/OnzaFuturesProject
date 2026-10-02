@@ -41,7 +41,7 @@ function calcOpenPnl(p, markPrice) {
 
 function updateLivePnl() {
   if (!openPos.length) return;
-  let tAcc = 0, tFl = 0, tMrg = 0, missingPrice = false;
+  let tAcc = 0, tFl = 0, tMrg = 0, tNet = 0, missingPrice = false;
   const priceFresh = lastMarkFetchAt && Date.now() - lastMarkFetchAt < 15000;
   openPos.forEach(p => {
     const sym  = (p.pair || '').replace('/', '');
@@ -50,7 +50,7 @@ function updateLivePnl() {
     if (!pnl) { missingPrice = true; return; }
     const { floating: flUsdt, floatingPct: flPct, net: netUsdt,
       netPct, accumulated: accUsdt, margin } = pnl;
-    tAcc += accUsdt; tMrg += margin;
+    tAcc += accUsdt; tMrg += margin; tNet += netUsdt || 0;
     if (flUsdt === null) missingPrice = true;
     else tFl += flUsdt;
     const card = el('pos-' + p.id);
@@ -67,22 +67,22 @@ function updateLivePnl() {
       flEl.style.color = mark ? (flUsdt >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text3)';
     }
     if (netEl) {
-      netEl.textContent = mark
+      netEl.textContent = netPct !== null
         ? (netPct >= 0 ? '+' : '') + netPct.toFixed(2) + '% / ' + (netUsdt >= 0 ? '+' : '-') + '$' + Math.abs(netUsdt).toFixed(2)
         : '—';
-      netEl.style.color = mark ? (netUsdt >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text3)';
+      netEl.style.color = netPct !== null ? (netUsdt >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text3)';
     }
     if (netBig) {
-      netBig.textContent = mark
+      netBig.textContent = netPct !== null
         ? (netPct >= 0 ? '+' : '') + netPct.toFixed(2) + '%'
         : '—';
-      netBig.style.color = mark ? (netUsdt >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text3)';
+      netBig.style.color = netPct !== null ? (netUsdt >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text3)';
     }
   });
 
   // Summary strip
   el('live-summary').style.display = 'flex';
-  const tNet = tAcc + tFl;
+
   const tNetPct = tMrg ? (tNet / tMrg * 100) : 0;
   setLive('sum-accum', tAcc,   '$', 2, tMrg);
   if (missingPrice) {
@@ -127,7 +127,7 @@ function renderOpen() {
     const tp1     = p.tp1_filled || false;
     const tp2     = p.tp2_filled || false;
     const slDisp  = p.current_sl || p.stop_loss;
-    const accUsdt = parseFloat(p.pnl_accumulated || 0);
+    const accUsdt = calcOpenPnl(p, null)?.accumulated || 0;
     const entry   = parseFloat(p.entry || 0);
     const notional= Number(p.margin_used) * Number(p.leverage);
     const tp1Val  = parseFloat(p.tp1 || 0);
@@ -148,14 +148,14 @@ function renderOpen() {
           </div>
         </div>
         <div class="pos-pnl-block">
-          <div class="pos-pnl-label">NET total</div>
+          <div class="pos-pnl-label">Escenario máximo TP</div>
           <div class="pos-pnl-net p-net-big" style="color:var(--text3)">—</div>
         </div>
       </div>
 
       <div class="pos-pnl-detail">
         <div class="pos-pnl-col">
-          <div class="pos-pnl-col-label">Realizado (TPs)</div>
+          <div class="pos-pnl-col-label">Máximo TP (USDT)</div>
           <div class="pos-pnl-col-val" style="color:${accUsdt>=0?'var(--green)':'var(--red)'}">
             ${accUsdt>=0?'+':'-'}$${Math.abs(accUsdt).toFixed(2)}
           </div>
@@ -167,7 +167,7 @@ function renderOpen() {
         </div>
         <div style="width:1px;background:var(--border);flex-shrink:0;margin:0 12px"></div>
         <div class="pos-pnl-col">
-          <div class="pos-pnl-col-label">NET detalle</div>
+          <div class="pos-pnl-col-label">Resultado del escenario</div>
           <div class="pos-pnl-col-val p-net" style="color:var(--text3)">—</div>
         </div>
       </div>
