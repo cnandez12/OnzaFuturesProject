@@ -14,6 +14,7 @@ import requests
 from onza_processing import margin
 from bitunix_card import render_event_image as render_bitunix_event_image
 from audit_log import audit
+from telegram_channels import free_text
 
 
 ONZA_URL = "https://api.onza.tech/api/v1/webhooks/signal?source=TradingView"
@@ -125,7 +126,11 @@ def post_telegram(payload: dict, trade: dict | None, *,
                   duracion_ms=round((time.monotonic() - started) * 1000))
             response = requests.post(
                 base + "/sendPhoto",
-                data={"chat_id": parent_chat, "caption": telegram_text(payload),
+                data={"chat_id": parent_chat,
+                      "caption": free_text(payload, trade.get("date"), event_time,
+                                           trade.get("margin_used") if trade.get("margin_used") is not None else margin())
+                          if payload["typeSignal"] in ("tp1", "tp2", "tp3") else telegram_text(payload),
+                      **({"parse_mode": "HTML"} if payload["typeSignal"] in ("tp1", "tp2", "tp3") else {}),
                       "reply_parameters": json.dumps({"message_id": int(parent_id),
                                                        "allow_sending_without_reply": False})},
                 files={"photo": ("onza-event.jpg", picture, "image/jpeg")}, timeout=15,

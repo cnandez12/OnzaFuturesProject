@@ -44,18 +44,23 @@ class PostgresChannels(unittest.TestCase):
         self.assertEqual(self.cur.fetchone()["n"],3)
         self.event(5,"s1","tp2")
         self.event(6,"s4","tp3")
+        self.event(7,"s1","tp1")
         tc.plan_free(self.cur,"free")
         self.cur.execute("SELECT * FROM telegram_publications ORDER BY id")
         jobs = self.cur.fetchall()
-        self.assertEqual(len(jobs),5)
-        self.assertEqual(jobs[3]["parent_key"],"free:free:s1:entry")
+        self.assertEqual(len(jobs),6)
+        self.assertIsNone(jobs[3]["parent_key"])
+        self.assertEqual(jobs[3]["method"],"forwardMessage")
+        self.assertNotIn("caption",jobs[3]["body"])
+        self.assertEqual(jobs[5]["parent_key"],"free:free:s1:entry")
         self.assertIsNone(jobs[4]["parent_key"])
         self.conn.commit()
         with patch.object(tc,"call_telegram",return_value=("delivered",777,"confirmed")) as send:
-            for _ in range(5):
+            for _ in range(6):
                 self.assertTrue(tc.deliver(self.conn))
             self.assertFalse(tc.deliver(self.conn))
-            reply = send.call_args_list[3].args[1]["reply_parameters"]
+            self.assertNotIn("reply_parameters",send.call_args_list[3].args[1])
+            reply = send.call_args_list[5].args[1]["reply_parameters"]
             self.assertEqual(reply["message_id"],777)
 
     def test_daily_idempotent_order_and_pin(self):

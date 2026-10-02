@@ -5,6 +5,7 @@ import os
 import time
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from html import escape
 
 import requests
 from dotenv import load_dotenv
@@ -35,11 +36,14 @@ def highest_result(row):
 
 def report_parts(rows, day, english=False):
     """Chunk long reports; summary is last and is the only pinned message."""
-    lines, values = [], []
+    lines, values, labels = [], [], []
     for row in rows:
         label, value = highest_result(row)
         values.append(value)
-        lines.append(f"{row['symbol']} · {row['direction']} · {label} · {value:+.2f}%")
+        labels.append(label)
+        direction_icon = "🟢" if row["direction"] == "LONG" else "🔴"
+        result_icon = "🏆" if label == "TP3" else "✅" if label.startswith("TP") else "🛑" if label == "SL" else "🔄"
+        lines.append(f"{direction_icon} {row['symbol']} · {row['direction']}\n{result_icon} {label} · {value:+.2f}%\n")
     heading = ("📊 ONZA FUTURES · DAILY RESULTS" if english else "📊 ONZA FUTURES · CIERRE DEL DÍA") + f"\n📅 {day} · UTC\n"
     chunks, current = [], heading
     for line in lines:
@@ -47,26 +51,35 @@ def report_parts(rows, day, english=False):
             chunks.append(current + "\n\n" + (CTA_EN if english else CTA_ES))
             current = heading
         current += "\n" + line
-    wins = sum(v > 0 for v in values)
-    losses = sum(v < 0 for v in values)
-    neutral = len(values) - wins - losses
-    rate = wins / len(values) * 100 if values else 0
+    reached = sum(label.startswith("TP") for label in labels)
+    stops = labels.count("SL")
+    others = labels.count("CLOSE")
+    rate = reached / len(values) * 100 if values else 0
     total = sum(values, Decimal(0))
     if english:
-        summary = (f"\n\nClosed trades: {len(rows)}\n✅ Wins: {wins} · ❌ Losses: {losses} · Flat: {neutral}"
-                   f"\n🎯 Win rate (highest TP): {rate:.2f}%\n📊 Sum of ROI per signal: {total:+.2f}%"
-                   "\n\nHighest TP reached per closed trade; SL only if no TP was reached. "
-                   "Theoretical leveraged ROI before costs, not account return.\n\n" + CTA_EN)
+        summary = (f"\n━━━━━━━━━━━━━━━━━━\n📋 Closed trades: {len(rows)}\n✅ Reached a TP: {reached}"
+                   f"\n❌ SL without TP: {stops}"
+                   + (f"\n🔄 Other closes: {others}" if others else "")
+                   + f"\n🎯 Highest-TP win rate: {rate:.2f}%\n📊 Sum of ROI per signal: {total:+.2f}%\n\n" + CTA_EN)
     else:
-        summary = (f"\n\nOperaciones cerradas: {len(rows)}\n✅ Ganadas: {wins} · ❌ Perdidas: {losses} · Neutras: {neutral}"
-                   f"\n🎯 Efectividad (máximo TP): {rate:.2f}%\n📊 Suma de ROI por señal: {total:+.2f}%"
-                   "\n\nMáximo TP de cada operación cerrada; SL solo si no alcanzó TP. "
-                   "ROI teórico apalancado antes de costes, no rentabilidad de cuenta.\n\n" + CTA_ES)
+        summary = (f"\n━━━━━━━━━━━━━━━━━━\n📋 Operaciones cerradas: {len(rows)}\n✅ Con TP alcanzado: {reached}"
+                   f"\n❌ SL sin TP: {stops}"
+                   + (f"\n🔄 Otros cierres: {others}" if others else "")
+                   + f"\n🎯 Efectividad por máximo TP: {rate:.2f}%\n📊 Suma de ROI por señal: {total:+.2f}%\n\n" + CTA_ES)
     if len(current + summary) > 3900:
         chunks.append(current + "\n\n" + (CTA_EN if english else CTA_ES))
         current = heading
     chunks.append(current + summary)
     return chunks
+
+
+def duration_text(opened_at, event_time):
+    minutes = max(0, int((event_time - opened_at).total_seconds() // 60))
+    parts = []
+    for value, unit in ((minutes // 1440, "day"), ((minutes % 1440) // 60, "hour"), (minutes % 60, "minute")):
+        if value:
+            parts.append(f"{value} {unit}{'s' if value != 1 else ''}")
+    return " ".join(parts) or "0 minutes"
 
 
 def free_text(payload, opened_at=None, event_time=None, margin_used=None):
@@ -75,21 +88,21 @@ def free_text(payload, opened_at=None, event_time=None, margin_used=None):
     if kind == "entry":
         targets = "\n".join(f"🎯 TP{i}: {t['price']} · {roi(payload['entry'], t['price'], payload['direction'], payload['leverage']):+.2f}%"
                             for i, t in enumerate(payload["takeProfits"], 1))
-        body = (f"🎁 NEW FREE SIGNAL\n{header}\n⚙️ Leverage: {payload['leverage']}x"
+        return (f"🎁 NEW FREE SIGNAL\n{header}\n⚙️ Leverage: {payload['leverage']}x"
                 f"\nEntry price: {payload['entry']}\n{targets}\n🛑 Stop Loss: {payload['stopLoss']['price']}"
-                "\n\nFollow this signal's updates in this channel.")
-    else:
-        label = {"tp1": "✅ TP1 REACHED", "tp2": "✅ TP2 REACHED", "tp3": "🏆 TP3 REACHED",
-                 "sl": "🛑 STOP LOSS REACHED", "close": "🔄 TRADE CLOSED"}[kind]
-        value = roi(payload["entry"], payload["price"], payload["direction"], payload["leverage"])
-        body = f"{label}\n{header}\nEntry price: {payload['entry']}\nLast price: {payload['price']}\nROI at this level: {value:+.2f}%"
-        if margin_used is not None:
-            body += f"\nP&L at this level: {Decimal(str(margin_used)) * value / 100:+.2f} USDT"
-        if opened_at and event_time:
-            minutes = max(0, int((event_time - opened_at).total_seconds() // 60))
-            body += f"\nDuration: {minutes // 1440} days {(minutes % 1440) // 60} hours {minutes % 60} minutes"
-        body += "\nSource: ONZA FUTURES main channel"
-    return body + "\n\nTheoretical ROI before costs.\n\n" + CTA_EN
+                "\n\nFollow this signal's updates in this channel.\n\n" + CTA_EN)
+    label = {"tp1": "✅ TP1 REACHED", "tp2": "✅ TP2 REACHED", "tp3": "🏆 TP3 REACHED",
+             "sl": "🛑 STOP LOSS REACHED", "close": "🔄 TRADE CLOSED"}[kind]
+    value = roi(payload["entry"], payload["price"], payload["direction"], payload["leverage"])
+    identity = escape(f"{payload['symbol']} · {payload['direction']} · {payload['timeframe']}")
+    body = (f"<b>{label}</b>\n⚡ <b>ONZA FUTURES</b>\n━━━━━━━━━━━━━━━━━━\n\n"
+            f"🪙 <b>{identity}</b>\n📍 <b>Entry price:</b> {escape(str(payload['entry']))}"
+            f"\n🎯 <b>Last price:</b> {escape(str(payload['price']))}\n📊 <b>ROI:</b> {value:+.2f}%")
+    if margin_used is not None:
+        body += f"\n💵 <b>P&amp;L:</b> {Decimal(str(margin_used)) * value / 100:+.2f} USDT"
+    if opened_at and event_time:
+        body += f"\n⏱️ <b>Duration:</b> {duration_text(opened_at,event_time)}"
+    return body + "\n\n📲 <b>JOIN ONZA APP NOW</b> 👇🏻\n" + APP_URL
 
 
 def momentum(rows):
@@ -143,11 +156,17 @@ def plan_free(cur, channel):
                 cur.execute("INSERT INTO telegram_free_selections (signal_id,chat_id,week_start) VALUES (%s,%s,%s)", (p["signalId"],channel,monday))
                 enqueue(cur, parent_key, channel, "sendMessage", {"text": free_text(p)})
         elif kind != "entry" and (selected or kind in ("tp2", "tp3")) and p["symbol"].removesuffix(".P") not in blacklist:
-            # copyMessage preserves the original media while replacing its Spanish caption.
-            enqueue(cur, f"free:{channel}:{p['signalId']}:{kind}", channel, "copyMessage",
-                    {"from_chat_id": event["telegram_chat_id"], "message_id": event["telegram_message_id"],
-                     "caption": free_text(p,event["opened_at"],event["received_at"],event["margin_used"])},
-                    parent=parent_key if selected else None)
+            if kind in ("tp2", "tp3"):
+                # Native forward: original media, caption, and Telegram attribution.
+                # forwardMessage does not support reply_parameters.
+                enqueue(cur, f"free:{channel}:{p['signalId']}:{kind}", channel, "forwardMessage",
+                        {"from_chat_id": event["telegram_chat_id"], "message_id": event["telegram_message_id"]})
+            else:
+                enqueue(cur, f"free:{channel}:{p['signalId']}:{kind}", channel, "copyMessage",
+                        {"from_chat_id": event["telegram_chat_id"], "message_id": event["telegram_message_id"],
+                         "caption": free_text(p,event["opened_at"],event["received_at"],event["margin_used"]),
+                         "parse_mode": "HTML"}, parent=parent_key)
+
         cur.execute("INSERT INTO telegram_free_seen (event_id,chat_id) VALUES (%s,%s) ON CONFLICT DO NOTHING", (event["id"],channel))
 
 

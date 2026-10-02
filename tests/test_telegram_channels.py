@@ -55,8 +55,11 @@ class ChannelTests(unittest.TestCase):
         text = tc.free_text(payload,datetime(2026,10,1,tzinfo=timezone.utc),datetime(2026,10,2,tzinfo=timezone.utc))
         self.assertIn("TP2 REACHED",text)
         self.assertIn("+100.00%",text)
-        self.assertIn("1 days 0 hours",text)
+        self.assertIn("1 day",text)
         self.assertLess(len(text),1024)
+        self.assertNotIn("Source:",text)
+        self.assertNotIn("Theoretical",text)
+        self.assertIn("<b>ROI:</b>",text)
 
     @patch.dict("os.environ",{"TELEGRAM_BOT_TOKEN":"test"})
     @patch("telegram_channels.requests.post")
