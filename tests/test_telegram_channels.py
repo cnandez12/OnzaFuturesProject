@@ -67,21 +67,21 @@ class ChannelTests(unittest.TestCase):
         post.side_effect = requests.ReadTimeout()
         self.assertEqual(tc.call_telegram("copyMessage",{})[0],"unknown")
 
-    def test_daily_queries_closed_at_colombia_and_waits_for_main(self):
+    def test_daily_queries_closed_at_utc_and_waits_for_main(self):
         cur = MagicMock()
         cur.fetchone.return_value = {"value":"2026-10-01"}
         cur.fetchall.return_value = [closed()]
-        tc.plan_daily(cur,"main","free",datetime(2026,10,2,5,0,tzinfo=timezone.utc))
+        tc.plan_daily(cur,"main","free",datetime(2026,10,2,0,0,tzinfo=timezone.utc))
         calls = cur.execute.call_args_list
         query = next(c for c in calls if "SELECT * FROM sim_track_record" in c.args[0])
-        self.assertEqual(query.args[1][0].astimezone(timezone.utc).hour,5)
+        self.assertEqual(query.args[1][0].astimezone(timezone.utc).hour,0)
         self.assertEqual(query.args[1][1].astimezone(timezone.utc).day,2)
         self.assertTrue(any("requires_key" in c.args[0] for c in calls))
 
-    def test_no_report_before_local_day_ends(self):
+    def test_no_report_before_utc_day_ends(self):
         cur = MagicMock()
         cur.fetchone.return_value = {"value":"2026-10-01"}
-        tc.plan_daily(cur,"main","free",datetime(2026,10,2,4,59,tzinfo=timezone.utc))
+        tc.plan_daily(cur,"main","free",datetime(2026,10,1,23,59,tzinfo=timezone.utc))
         self.assertFalse(any("sim_track_record" in c.args[0] for c in cur.execute.call_args_list))
 
 

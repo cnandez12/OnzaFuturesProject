@@ -60,8 +60,8 @@ class PostgresChannels(unittest.TestCase):
 
     def test_daily_idempotent_order_and_pin(self):
         self.cur.execute("INSERT INTO telegram_channel_state VALUES ('daily_next:main','2026-10-01')")
-        self.cur.execute("INSERT INTO sim_track_record VALUES (3,'SOLUSDT','LONG',100,98,20,true,true,false,101,105.25,110,'SL',-3,'2026-10-02T04:59:00+00:00')")
-        now = datetime(2026,10,2,5,0,tzinfo=timezone.utc)
+        self.cur.execute("INSERT INTO sim_track_record VALUES (3,'SOLUSDT','LONG',100,98,20,true,true,false,101,105.25,110,'SL',-3,'2026-10-01T23:59:00+00:00')")
+        now = datetime(2026,10,2,0,0,tzinfo=timezone.utc)
         tc.plan_daily(self.cur,"main","free",now)
         tc.plan_daily(self.cur,"main","free",now)
         self.cur.execute("SELECT * FROM telegram_publications ORDER BY id")

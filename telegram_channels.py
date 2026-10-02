@@ -40,7 +40,7 @@ def report_parts(rows, day, english=False):
         label, value = highest_result(row)
         values.append(value)
         lines.append(f"{row['symbol']} · {row['direction']} · {label} · {value:+.2f}%")
-    heading = ("📊 ONZA FUTURES · DAILY RESULTS" if english else "📊 ONZA FUTURES · CIERRE DEL DÍA") + f"\n📅 {day} · Colombia\n"
+    heading = ("📊 ONZA FUTURES · DAILY RESULTS" if english else "📊 ONZA FUTURES · CIERRE DEL DÍA") + f"\n📅 {day} · UTC\n"
     chunks, current = [], heading
     for line in lines:
         if len(current) + len(line) > 3000:
@@ -154,13 +154,13 @@ def plan_free(cur, channel):
 def plan_daily(cur, main_channel, free_channel, now):
     # Persist the first day; catch up missed daily reports after restarts.
     key = "daily_next:" + main_channel
-    today = now.astimezone(COLOMBIA).date()
+    today = now.astimezone(timezone.utc).date()
     cur.execute("INSERT INTO telegram_channel_state (name,value) VALUES (%s,%s) ON CONFLICT DO NOTHING", (key,str(today)))
     cur.execute("SELECT value FROM telegram_channel_state WHERE name=%s", (key,))
     day = datetime.fromisoformat(cur.fetchone()["value"]).date()
     if day >= today:
         return
-    start = datetime.combine(day, datetime.min.time(), COLOMBIA)
+    start = datetime.combine(day, datetime.min.time(), timezone.utc)
     end = start + timedelta(days=1)
     cur.execute("SELECT * FROM sim_track_record WHERE closed_at >= %s AND closed_at < %s ORDER BY closed_at,id", (start,end))
     rows = cur.fetchall()
