@@ -34,7 +34,7 @@ def highest_result(row):
     return label, roi(row["entry_price"], row["exit_price"], row["direction"], row["leverage"])
 
 
-def report_parts(rows, day, english=False):
+def report_parts(rows, day, english=False, weekly=False):
     """Chunk long reports; summary is last and is the only pinned message."""
     lines, values, labels = [], [], []
     for row in rows:
@@ -45,6 +45,8 @@ def report_parts(rows, day, english=False):
         result_icon = "🏆" if label == "TP3" else "✅" if label.startswith("TP") else "🛑" if label == "SL" else "🔄"
         lines.append(f"{direction_icon} {row['symbol']} · {row['direction']}\n{result_icon} {label} · {value:+.2f}%\n")
     heading = ("📊 ONZA FUTURES · DAILY RESULTS" if english else "📊 ONZA FUTURES · CIERRE DEL DÍA") + f"\n📅 {day} · UTC\n"
+    if weekly:
+        heading = f"📊 ONZA FUTURES · WEEKLY RESULTS\n📅 {day} – {day + timedelta(days=6)} · UTC\n"
     chunks, current = [], heading
     for line in lines:
         if len(current) + len(line) > 3000:
@@ -88,9 +90,9 @@ def free_text(payload, opened_at=None, event_time=None, margin_used=None):
     if kind == "entry":
         targets = "\n".join(f"🎯 TP{i}: {t['price']} · {roi(payload['entry'], t['price'], payload['direction'], payload['leverage']):+.2f}%"
                             for i, t in enumerate(payload["takeProfits"], 1))
-        return (f"🎁 NEW FREE SIGNAL\n{header}\n⚙️ Leverage: {payload['leverage']}x"
+        return (f"🎁 FREE SIGNAL · FULL ACCESS\n{header}\n⚙️ Leverage: {payload['leverage']}x"
                 f"\nEntry price: {payload['entry']}\n{targets}\n🛑 Stop Loss: {payload['stopLoss']['price']}"
-                "\n\nFollow this signal's updates in this channel.\n\n" + CTA_EN)
+                "\n\nOne of our free weekly signals. Full levels included. Follow the updates below.\n\n" + CTA_EN)
     label = {"tp1": "✅ TP1 REACHED", "tp2": "✅ TP2 REACHED", "tp3": "🏆 TP3 REACHED",
              "sl": "🛑 STOP LOSS REACHED", "close": "🔄 TRADE CLOSED"}[kind]
     value = roi(payload["entry"], payload["price"], payload["direction"], payload["leverage"])
@@ -103,6 +105,15 @@ def free_text(payload, opened_at=None, event_time=None, margin_used=None):
     if opened_at and event_time:
         body += f"\n⏱️ <b>Duration:</b> {duration_text(opened_at,event_time)}"
     return body + "\n\n📲 <b>JOIN ONZA APP NOW</b> 👇🏻\n" + APP_URL
+
+
+def masked_entry(payload):
+    return ("🔔 <b>NEW SIGNAL · ONZA FUTURES</b>\n━━━━━━━━━━━━━━━━━━\n\n"
+            f"🪙 <b>{escape(payload['symbol'])} · {escape(payload['timeframe'])}</b>\n"
+            f"⚡ <b>Leverage: {payload['leverage']}x</b>\n"
+            "🔒 <b>Direction: HIDDEN</b>\n📍 <b>Entry:</b> 🔒\n"
+            "🎯 <b>TP1:</b> 🔒\n🎯 <b>TP2:</b> 🔒\n🎯 <b>TP3:</b> 🔒\n⛔ <b>SL:</b> 🔒\n\n"
+            "🚀 <b>Unlock the full signal in Onza App</b>\n\n📲 <b>JOIN ONZA APP NOW</b> 👇🏻\n" + APP_URL)
 
 
 def momentum(rows):
@@ -142,7 +153,7 @@ def plan_free(cur, channel):
         parent_key = f"free:{channel}:{p['signalId']}:entry"
         cur.execute("SELECT * FROM telegram_free_selections WHERE signal_id=%s AND chat_id=%s", (p["signalId"], channel))
         selected = cur.fetchone()
-        if kind == "entry" and p["symbol"].removesuffix(".P") not in blacklist:
+        if kind == "entry":
             day = datetime.now(COLOMBIA).date()
             monday = day - timedelta(days=day.weekday())
             cur.execute("SELECT count(*) AS n FROM telegram_free_selections WHERE chat_id=%s AND week_start=%s", (channel, monday))
@@ -152,16 +163,14 @@ def plan_free(cur, channel):
             # Do not offer entries that have already progressed while the queue was offline.
             cur.execute("SELECT 1 FROM tv_events WHERE signal_id=%s AND event_type<>'entry' AND state='applied' LIMIT 1", (p["signalId"],))
             progressed = cur.fetchone()
-            if count < 3 and dominant == p["direction"] and not progressed:
+            if count < 3 and dominant == p["direction"] and not progressed and p["symbol"].removesuffix(".P") not in blacklist:
                 cur.execute("INSERT INTO telegram_free_selections (signal_id,chat_id,week_start) VALUES (%s,%s,%s)", (p["signalId"],channel,monday))
                 enqueue(cur, parent_key, channel, "sendMessage", {"text": free_text(p)})
-        elif kind != "entry" and (selected or kind in ("tp2", "tp3")) and p["symbol"].removesuffix(".P") not in blacklist:
-            if kind in ("tp2", "tp3"):
-                # Native forward: original media, caption, and Telegram attribution.
-                # forwardMessage does not support reply_parameters.
-                enqueue(cur, f"free:{channel}:{p['signalId']}:{kind}", channel, "forwardMessage",
-                        {"from_chat_id": event["telegram_chat_id"], "message_id": event["telegram_message_id"]})
             else:
+                enqueue(cur, parent_key, channel, "sendMessage", {"text": masked_entry(p), "parse_mode": "HTML"})
+        else:
+            cur.execute("SELECT 1 FROM telegram_publications WHERE job_key=%s", (parent_key,))
+            if cur.fetchone():
                 enqueue(cur, f"free:{channel}:{p['signalId']}:{kind}", channel, "copyMessage",
                         {"from_chat_id": event["telegram_chat_id"], "message_id": event["telegram_message_id"],
                          "caption": free_text(p,event["opened_at"],event["received_at"],event["margin_used"]),
@@ -189,14 +198,28 @@ def plan_daily(cur, main_channel, free_channel, now):
         if i:
             cur.execute("UPDATE telegram_publications SET requires_key=%s WHERE job_key=%s",
                         (f"daily:{main_channel}:{day}:{i-1}",f"daily:{main_channel}:{day}:{i}"))
-    if free_channel:
-        for i,text in enumerate(report_parts(rows,day,True)):
-            # English translation published only after the main report is confirmed.
-            enqueue(cur,f"daily:{free_channel}:{day}:{i}",free_channel,"sendMessage",{"text":text},
-                    parent=None)
-            cur.execute("UPDATE telegram_publications SET requires_key=%s WHERE job_key=%s",
-                        (f"daily:{free_channel}:{day}:{i-1}" if i else f"daily:{main_channel}:{day}:{len(main_parts)-1}",f"daily:{free_channel}:{day}:{i}"))
     cur.execute("UPDATE telegram_channel_state SET value=%s WHERE name=%s", (str(day+timedelta(days=1)),key))
+
+
+def plan_weekly(cur, channel, now):
+    today = now.astimezone(timezone.utc).date()
+    monday = today - timedelta(days=today.weekday())
+    key = "weekly_next:" + channel
+    cur.execute("INSERT INTO telegram_channel_state (name,value) VALUES (%s,%s) ON CONFLICT DO NOTHING", (key,str(monday)))
+    cur.execute("SELECT value FROM telegram_channel_state WHERE name=%s", (key,))
+    start_day = datetime.fromisoformat(cur.fetchone()["value"]).date()
+    if start_day >= monday:
+        return
+    start = datetime.combine(start_day, datetime.min.time(), timezone.utc)
+    end = start + timedelta(days=7)
+    cur.execute("SELECT * FROM sim_track_record WHERE closed_at >= %s AND closed_at < %s ORDER BY closed_at,id", (start,end))
+    parts = report_parts(cur.fetchall(),start_day,True,weekly=True)
+    for i,text in enumerate(parts):
+        job = f"weekly:{channel}:{start_day}:{i}"
+        enqueue(cur,job,channel,"sendMessage",{"text":text})
+        if i:
+            cur.execute("UPDATE telegram_publications SET requires_key=%s WHERE job_key=%s",(f"weekly:{channel}:{start_day}:{i-1}",job))
+    cur.execute("UPDATE telegram_channel_state SET value=%s WHERE name=%s",(str(start_day+timedelta(days=7)),key))
 
 
 def call_telegram(method, body):
@@ -273,7 +296,10 @@ def main():
                 with conn:
                     with conn.cursor(cursor_factory=RealDictCursor) as cur:
                         if free_channel:
+                            # Cancel unsent daily Free reports when switching to weekly.
+                            cur.execute("UPDATE telegram_publications SET status='skipped',detail='Replaced by weekly report' WHERE chat_id=%s AND job_key LIKE %s AND status='pending'",(free_channel,f"daily:{free_channel}:%"))
                             plan_free(cur,free_channel)
+                            plan_weekly(cur,free_channel,datetime.now(timezone.utc))
                         plan_daily(cur,main_channel,free_channel,datetime.now(timezone.utc))
                 for _ in range(30):
                     if not deliver(conn):

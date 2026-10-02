@@ -48,20 +48,19 @@ class PostgresChannels(unittest.TestCase):
         tc.plan_free(self.cur,"free")
         self.cur.execute("SELECT * FROM telegram_publications ORDER BY id")
         jobs = self.cur.fetchall()
-        self.assertEqual(len(jobs),6)
-        self.assertIsNone(jobs[3]["parent_key"])
-        self.assertEqual(jobs[3]["method"],"forwardMessage")
-        self.assertNotIn("caption",jobs[3]["body"])
-        self.assertEqual(jobs[5]["parent_key"],"free:free:s1:entry")
-        self.assertIsNone(jobs[4]["parent_key"])
+        self.assertEqual(len(jobs),7)
+        self.assertIn("FULL ACCESS",jobs[0]["body"]["text"])
+        self.assertIn("HIDDEN",jobs[3]["body"]["text"])
+        self.assertEqual(jobs[4]["parent_key"],"free:free:s1:entry")
+        self.assertEqual(jobs[5]["parent_key"],"free:free:s4:entry")
+        self.assertEqual(jobs[4]["method"],"copyMessage")
         self.conn.commit()
         with patch.object(tc,"call_telegram",return_value=("delivered",777,"confirmed")) as send:
-            for _ in range(6):
+            for _ in range(7):
                 self.assertTrue(tc.deliver(self.conn))
             self.assertFalse(tc.deliver(self.conn))
-            self.assertNotIn("reply_parameters",send.call_args_list[3].args[1])
-            reply = send.call_args_list[5].args[1]["reply_parameters"]
-            self.assertEqual(reply["message_id"],777)
+            for call in send.call_args_list[4:]:
+                self.assertEqual(call.args[1]["reply_parameters"]["message_id"],777)
 
     def test_daily_idempotent_order_and_pin(self):
         self.cur.execute("INSERT INTO telegram_channel_state VALUES ('daily_next:main','2026-10-01')")
@@ -71,13 +70,12 @@ class PostgresChannels(unittest.TestCase):
         tc.plan_daily(self.cur,"main","free",now)
         self.cur.execute("SELECT * FROM telegram_publications ORDER BY id")
         jobs = self.cur.fetchall()
-        self.assertEqual(len(jobs),2)
+        self.assertEqual(len(jobs),1)
         self.assertIn("TP2 · +105.00%",jobs[0]["body"]["text"])
         self.assertTrue(jobs[0]["pin_after"])
-        self.assertEqual(jobs[1]["requires_key"],jobs[0]["job_key"])
+        self.assertEqual(jobs[0]["chat_id"],"main")
         self.conn.commit()
         with patch.object(tc,"call_telegram",return_value=("delivered",777,"confirmed")) as send:
-            self.assertTrue(tc.deliver(self.conn))
             self.assertTrue(tc.deliver(self.conn))
             self.assertTrue(tc.deliver(self.conn))
             self.assertEqual(send.call_args.args[0],"pinChatMessage")
@@ -94,3 +92,20 @@ class PostgresChannels(unittest.TestCase):
             self.assertTrue(tc.deliver(self.conn))
             self.assertFalse(tc.deliver(self.conn))
             self.assertEqual(send.call_count,1)
+
+    def test_weekly_closed_trades_utc_bounds_and_deduplication(self):
+        self.cur.execute("INSERT INTO telegram_channel_state VALUES ('weekly_next:free','2026-09-28')")
+        self.cur.execute("INSERT INTO sim_track_record VALUES (3,'SOLUSDT','LONG',100,98,20,true,true,false,101,105.25,110,'SL',-3,'2026-10-04T23:59:00+00:00')")
+        self.cur.execute("INSERT INTO sim_track_record VALUES (4,'EXCLUDED','LONG',100,98,20,false,false,false,101,105,110,'SL',-40,'2026-10-05T00:00:00+00:00')")
+        tc.plan_weekly(self.cur,"free",datetime(2026,10,4,23,59,tzinfo=timezone.utc))
+        self.cur.execute("SELECT count(*) AS n FROM telegram_publications")
+        self.assertEqual(self.cur.fetchone()["n"],0)
+        tc.plan_weekly(self.cur,"free",datetime(2026,10,5,0,0,tzinfo=timezone.utc))
+        tc.plan_weekly(self.cur,"free",datetime(2026,10,5,0,1,tzinfo=timezone.utc))
+        self.cur.execute("SELECT * FROM telegram_publications")
+        jobs=self.cur.fetchall()
+        self.assertEqual(len(jobs),1)
+        text=jobs[0]["body"]["text"]
+        self.assertIn("WEEKLY RESULTS",text)
+        self.assertIn("TP2 · +105.00%",text)
+        self.assertNotIn("EXCLUDED",text)

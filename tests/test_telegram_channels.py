@@ -79,13 +79,23 @@ class ChannelTests(unittest.TestCase):
         query = next(c for c in calls if "SELECT * FROM sim_track_record" in c.args[0])
         self.assertEqual(query.args[1][0].astimezone(timezone.utc).hour,0)
         self.assertEqual(query.args[1][1].astimezone(timezone.utc).day,2)
-        self.assertTrue(any("requires_key" in c.args[0] for c in calls))
+        self.assertFalse(any("daily:free:" in str(c) for c in calls))
 
     def test_no_report_before_utc_day_ends(self):
         cur = MagicMock()
         cur.fetchone.return_value = {"value":"2026-10-01"}
         tc.plan_daily(cur,"main","free",datetime(2026,10,1,23,59,tzinfo=timezone.utc))
         self.assertFalse(any("sim_track_record" in c.args[0] for c in cur.execute.call_args_list))
+
+    def test_masked_entry_does_not_leak_parameters(self):
+        p=dict(symbol="APEUSD.P",direction="LONG",timeframe="1H",leverage=20,entry=0.16,
+               signalId="private-id",takeProfits=[dict(price=0.1646),dict(price=0.1738),dict(price=0.1876)],stopLoss=dict(price=0.1508),typeSignal="entry")
+        text=tc.masked_entry(p)
+        for secret in ("LONG","0.16","0.1646","0.1738","0.1876","0.1508","private-id","57.50","FREE SIGNAL"):
+            self.assertNotIn(secret,text)
+        self.assertIn("HIDDEN",text)
+        self.assertIn("FULL ACCESS",tc.free_text(p))
+        self.assertIn("0.1646",tc.free_text(p))
 
 
 if __name__ == "__main__":
