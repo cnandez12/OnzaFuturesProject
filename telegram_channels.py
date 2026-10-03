@@ -1,6 +1,7 @@
 """English Free channel and daily highest-TP reports. Durable, separate from Onza."""
 from __future__ import annotations
 
+from telegram_policy import suppression_for_signal
 import os
 import time
 from datetime import datetime, timedelta, timezone
@@ -150,6 +151,9 @@ def plan_free(cur, channel):
     blacklist = {x.strip().upper().replace("USDT", "USD").removesuffix(".P") for x in os.getenv("ONZA_FREE_BLACKLIST", "").split(",") if x.strip()}
     for event in events:
         p, kind = event["payload"], event["event_type"]
+        if suppression_for_signal(cur, p["signalId"], kind):
+            cur.execute("INSERT INTO telegram_free_seen (event_id,chat_id) VALUES (%s,%s) ON CONFLICT DO NOTHING", (event["id"],channel))
+            continue
         parent_key = f"free:{channel}:{p['signalId']}:entry"
         cur.execute("SELECT * FROM telegram_free_selections WHERE signal_id=%s AND chat_id=%s", (p["signalId"], channel))
         selected = cur.fetchone()
@@ -252,6 +256,13 @@ def deliver(conn):
             job = cur.fetchone()
             if not job:
                 return False
+            # Recheck queued Free closures, including jobs prepared before deployment.
+            if job["job_key"].startswith("free:"):
+                _, _, signal_id, kind = job["job_key"].split(":", 3)
+                reason = suppression_for_signal(cur, signal_id, kind)
+                if reason:
+                    cur.execute("UPDATE telegram_publications SET status='skipped',detail=%s WHERE id=%s", (reason,job["id"]))
+                    return True
             cur.execute("UPDATE telegram_publications SET status='sending' WHERE id=%s",(job["id"],))
     body = dict(job["body"],chat_id=job["chat_id"])
     if job["parent_message"]:

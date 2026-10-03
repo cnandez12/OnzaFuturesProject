@@ -21,6 +21,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 
+from telegram_policy import closing_suppression
 from onza_contract import InvalidSignal
 from onza_delivery import post_onza, post_telegram
 from onza_processing import DeferredEvent, apply_event
@@ -163,6 +164,13 @@ def claim_delivery(channel: str):
                     (event["signal_id"],),
                 )
                 related = cur.fetchall()
+                if channel == "telegram":
+                    suppressed = closing_suppression(event["event_type"], related)
+                    if suppressed:
+                        cur.execute("UPDATE tv_events SET telegram_status='skipped', telegram_result=%s WHERE id=%s",
+                                    (suppressed, event["id"]))
+                        audit("TELEGRAM EVENTO OMITIDO", event["payload"], event["id"], motivo=suppressed)
+                        continue
                 send_onza = False
                 if channel == "onza":
                     send_onza, invalid = onza_gate(event, related)
