@@ -46,6 +46,12 @@ class Connection:
     def __exit__(self, *_args):
         return False
 
+    def set_session(self, **kwargs):
+        assert kwargs["readonly"] is True
+
+    def close(self):
+        pass
+
     def cursor(self, **_kwargs):
         return Cursor(self.rows)
 

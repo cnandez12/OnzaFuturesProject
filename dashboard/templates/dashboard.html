@@ -26,6 +26,7 @@
 <link rel="stylesheet" href="/static/css/responsive.css">
 <link rel="stylesheet" href="/static/css/mission-control.css">
 <link rel="stylesheet" href="/static/css/cryptopilot-brand.css">
+<link rel="stylesheet" href="/static/css/audit.css?v=2">
 </head>
 <body>
 
@@ -612,31 +613,32 @@
 
 
 <section id="pg-audit" class="page" style="padding:20px;">
-  <header class="mission-head">
-    <div>
-      <div class="mission-eyebrow">AUDITORÍA DE ESCENARIOS · EVENTOS DE TRADINGVIEW</div>
-      <h1>Escenarios de <span class="gradient-text">salida</span></h1>
-      <p>La misma señal en tres lecturas. TP1/TP2/TP3 cierran 40/40/20 en los dos modos de parciales.</p>
-    </div>
-  </header>
-  <div class="card" style="padding:16px; margin-bottom:16px;">
-    <label for="audit-mode">Modo de presentación</label>
-    <select id="audit-mode" onchange="renderAudit()" style="margin:0 12px; max-width:100%;">
-      <option value="partial_no_be">Parciales 40/40/20 · stop original</option>
-      <option value="partial_be">Parciales 40/40/20 · BE tras TP1</option>
-      <option value="max_tp">TP más alto alcanzado</option>
-    </select>
-    <p id="audit-explanation" style="font-size:12px;color:var(--text2);margin-top:12px;"></p>
+  <header class="mission-head"><div><div class="mission-eyebrow">AUDITORÍA · GESTIÓN DE RIESGO · BASE DE DATOS</div>
+    <h1>Escenarios de <span class="gradient-text">salida</span></h1>
+    <p>La misma señal, tres estrategias. Detalle por tramo, conciliación e incidencias.</p></div></header>
+  <div class="card audit-card" style="padding:16px;">
+    <div class="audit-controls">
+      <label>Escenario<select id="audit-mode" onchange="renderAudit()">
+        <option value="partial_no_be">40/40/20 · stop original</option><option value="partial_be">40/40/20 · BE tras TP1</option>
+        <option value="max_tp">100% al TP más alto · retrospectivo</option></select></label>
+      <label>Entrada desde · Colombia<input id="audit-from" type="date"></label>
+      <label>Entrada hasta · Colombia<input id="audit-to" type="date"></label>
+      <label>Estado base<select id="audit-status-filter" onchange="document.getElementById('audit-status-input').value=this.value"><option value="all">Todas</option><option value="closed">Cerradas</option><option value="open">Abiertas</option></select></label>
+      <input id="audit-status-input" type="hidden" value="all">
+      <label>Buscar símbolo / ID / dirección<input id="audit-search" type="search" placeholder="BTC, LONG, signalId…"></label>
+      <button type="button" onclick="renderAudit()">Aplicar / actualizar</button><button type="button" onclick="exportAudit('csv')">Exportar tramos CSV</button><button type="button" onclick="exportAudit('json')">Exportar informe completo JSON</button>
+    </div><p id="audit-explanation" class="audit-note" style="padding:12px 0 0;margin:0;"></p>
   </div>
+  <div id="audit-coverage" class="card audit-note" role="status"></div>
   <div id="audit-summary" class="kpi-grid" aria-live="polite"></div>
-  <div class="card" style="overflow-x:auto;">
-    <div class="card-head"><strong>Señales registradas</strong><span id="audit-status" class="card-sub"></span></div>
-    <table style="width:100%;min-width:850px;border-collapse:collapse;font-size:12px;">
-      <thead><tr><th>ID / fecha</th><th>Origen TV</th><th>Máximo TP</th><th>BE habilitado</th><th>Salida del escenario</th><th>Resultado bruto</th><th>Calidad</th><th>Entrega Onza</th></tr></thead>
-      <tbody id="audit-rows"></tbody>
-    </table>
+  <div class="card audit-card"><div class="card-head"><strong>Comparación sobre la misma selección</strong></div><div id="audit-comparison"></div><p id="audit-conclusion" class="audit-note"></p></div>
+  <div class="card audit-card"><div class="card-head"><strong>P&L acumulado de cierres por estrategia</strong><span class="card-sub">Margen histórico · sin reinversión</span></div><div class="audit-curve"><canvas id="audit-curve" aria-label="Comparación del P&L de las tres estrategias" role="img"></canvas></div></div>
+  <div class="card audit-card audit-scroll"><div class="card-head"><strong>Señales y detalle de cálculo</strong><span id="audit-status" class="card-sub"></span></div>
+    <table class="audit-table" style="min-width:1100px"><thead><tr><th>ID / entrada Colombia</th><th>Símbolo / dirección / TF</th><th>Margen histórico</th><th>Máximo TP</th><th>Regla BE</th><th>Salida escenario</th><th>P&L cerrado</th><th>Parciales base registrados</th><th>Conciliación original</th></tr></thead><tbody id="audit-rows"></tbody></table>
   </div>
+  <div class="card audit-card"><div class="card-head"><strong>Incidencias globales · eventos excluidos del cálculo</strong></div><p class="audit-note">Estos eventos permanecen guardados. Se muestran sus estados; la auditoría no los reenvía ni reprocesa. Las incidencias globales no se ocultan con los filtros de rendimiento.</p><div id="audit-incidents"></div></div>
 </section>
+
 
 <!-- ══════════════════════════════════════════════════════════════════════════
      SCRIPTS — Load order matters (dependencies first)
@@ -658,7 +660,7 @@
 <script src="/static/js/curve.js"></script>
 <script src="/static/js/symbols.js"></script>
 <script src="/static/js/fb-chart.js"></script>
-<script src="/static/js/audit.js"></script>
+<script src="/static/js/audit.js?v=2"></script>
 <script src="/static/js/timers.js"></script>
 <script src="/static/js/app.js"></script>
 </body>

@@ -12,7 +12,8 @@ from psycopg2.extras import Json, RealDictCursor
 from flask import jsonify, request
 
 from dashboard.app import app, check_auth
-from audit_scenarios import MODES, evaluate, summarize
+from audit_scenarios import MODES
+from audit_reporting import AUDIT_SQL, build_report
 from onza_contract import InvalidSignal, canonicalize
 from audit_log import audit
 
@@ -75,47 +76,27 @@ def audit_results():
     mode = request.args.get("mode", "partial_no_be")
     if mode not in MODES:
         return jsonify(error="Modo de auditoría inválido"), 400
+    conn = None
     try:
-        with database_connection() as conn:
+        conn = database_connection()
+        conn.set_session(readonly=True, isolation_level="REPEATABLE READ")
+        with conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(
-                    """SELECT s.signal_id, s.exchange, s.margin_used,
-                              s.be_activated_at, e.id, e.event_type,
-                              e.payload, e.received_at, e.applied_at, e.onza_status
-                       FROM tv_signals s JOIN tv_events e
-                         ON e.signal_id=s.signal_id AND e.state='applied'
-                       ORDER BY s.id, e.applied_at, e.id"""
-                )
+                cur.execute("SET LOCAL statement_timeout = 15000")
+                cur.execute(AUDIT_SQL)
                 event_rows = cur.fetchall()
+        report = build_report(event_rows, mode=mode,
+                              fallback_margin=os.getenv("MARGIN_PER_TRADE", "20"),
+                              filters={key: request.args.get(key, "") for key in ("from", "to", "status", "search")})
+        return jsonify(report)
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 400
     except (psycopg2.Error, RuntimeError) as exc:
         app.logger.error("Auditoría no disponible: %s", type(exc).__name__)
         return jsonify(error="Auditoría no disponible"), 503
-
-    grouped = {}
-    for row in event_rows:
-        signal_id = row["signal_id"]
-        if signal_id not in grouped:
-            grouped[signal_id] = {"exchange": row["exchange"],
-                                  "margin": row["margin_used"] or os.getenv("MARGIN_PER_TRADE", "20"),
-                                  "margin_recorded": row["margin_used"] is not None,
-                                  "activation": row["be_activated_at"], "events": [], "onza": []}
-        grouped[signal_id]["events"].append({
-            "id": row["id"], "typeSignal": row["event_type"],
-            "payload": row["payload"], "received_at": row["received_at"],
-            "applied_at": row["applied_at"]})
-        grouped[signal_id]["onza"].append(row["onza_status"])
-    results = []
-    for signal_id, item in grouped.items():
-        if not any(e["typeSignal"] == "entry" for e in item["events"]):
-            continue
-        result = evaluate(signal_id, item["events"], mode=mode,
-                          margin=item["margin"], be_activated_at=item["activation"])
-        result["source_exchange"] = item["exchange"]
-        result["margin_recorded"] = item["margin_recorded"]
-        result["onza_delivery"] = "delivered" if all(s == "delivered" for s in item["onza"]) else "pending_or_review"
-        results.append(result)
-    results.reverse()
-    return jsonify(summary=summarize(results, mode), rows=results)
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @app.post("/webhook/tradingview")

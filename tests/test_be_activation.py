@@ -36,6 +36,8 @@ class BeActivationTests(unittest.TestCase):
         self.assertTrue(any("be_activated_at = COALESCE" in sql for sql in statements))
         self.assertFalse(any("current_sl" in sql for sql in statements))
         self.assertEqual(cursor.calls[-1][1][0], timestamp)
+        self.assertEqual(cursor.calls[-1][1][1], Decimal("100"))
+        self.assertIn("be_stop_price = %s", cursor.calls[-1][0])
 
 
 if __name__ == "__main__":

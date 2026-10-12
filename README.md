@@ -69,3 +69,13 @@ La API pública de Bitunix confirmó los 34 símbolos únicos de las 61 alertas 
 Galería de las 50 plantillas limpias y referencias: `galeria_imagenes_onza.html`. Se regeneran con `python build_bitunix_card_templates.py` a partir de `assets/bitunix/clean/`.
 
 Las imágenes muestran el movimiento firmado entre entrada y precio del evento, multiplicado por 20, sobre el margen completo de la señal. No ponderan parciales ni muestran etiquetas TP/SL/cierre o el sufijo UTC. La fecha mantiene su referencia horaria UTC. Este rendimiento ilustrativo de la tarjeta es independiente de los escenarios contables del dashboard.
+
+## Auditoría de gestión de riesgo
+
+La sección Auditoría reconstruye las señales desde `tv_events` y muestra tres lecturas sobre la misma selección: parciales 40/40/20 con stop original, parciales con BE automático tras TP1 y proyección retrospectiva del 100% del margen al máximo TP registrado. Sin TP, la tercera lectura usa el precio de cierre. Las abiertas no se incluyen en win rate, profit factor ni P&L cerrado; sus parciales se muestran por separado.
+
+TP1 guarda `tv_signals.be_activated_at` y `tv_signals.be_stop_price` (entrada). `schema.sql` completa ambos campos para las señales históricas con TP1 aplicado. Esta regla se aplica en el escenario BE; el registro financiero base mantiene el stop original. Una alerta de salida adversa después de TP1 simula la salida del remanente en entrada, sin afirmar una hora observada de cruce o un fill del exchange.
+
+La tabla incluye tramos, cantidades, precios, ROI, remanentes y estados de entrega por evento. La conciliación compara el escenario original con `sim_track_record`. Los eventos sin entrada o con registros inconsistentes aparecen en incidencias globales y no reciben un P&L inventado. Fechas de filtro: día de entrada en America/Bogota. El margen y el apalancamiento usados son los históricos de cada señal. La curva mide P&L acumulado de cierres, sin reinversión y sin costos. Se puede exportar el detalle de las tres lecturas en CSV y el corte completo con eventos e incidencias en JSON; las credenciales de los payloads se excluyen.
+
+La API `/api/audit/results` admite `mode`, `from`, `to`, `status` (`all`, `closed`, `open`) y `search`. Sus consultas son de solo lectura y el informe no ejecuta envíos ni reprocesa eventos.

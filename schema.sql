@@ -128,3 +128,13 @@ CREATE TABLE IF NOT EXISTS telegram_publications (
     message_id BIGINT, detail TEXT, available_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_telegram_publications_pending ON telegram_publications(id) WHERE status='pending';
+
+-- Auditoría: TP1 habilita BE en entrada; el trade base conserva su stop original.
+ALTER TABLE tv_signals ADD COLUMN IF NOT EXISTS be_stop_price NUMERIC(20,8);
+UPDATE tv_signals s
+SET be_activated_at = COALESCE(s.be_activated_at, tp.received_at),
+    be_stop_price = (en.payload->>'entry')::numeric
+FROM tv_events tp, tv_events en
+WHERE tp.signal_id = s.signal_id AND tp.event_type = 'tp1' AND tp.state = 'applied'
+  AND en.signal_id = s.signal_id AND en.event_type = 'entry' AND en.state = 'applied'
+  AND (s.be_activated_at IS NULL OR s.be_stop_price IS DISTINCT FROM (en.payload->>'entry')::numeric);

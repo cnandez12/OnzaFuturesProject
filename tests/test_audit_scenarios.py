@@ -44,12 +44,13 @@ class AuditScenarioTests(unittest.TestCase):
         self.assertEqual(result["pnl_usdt"], 7.2)
         self.assertTrue(result["closed"])
 
-    def test_max_tp_has_no_invented_profit(self):
+    def test_max_tp_prices_full_margin_at_highest_recorded_target(self):
         result = self.calc("max_tp", "tp1", "tp2", "tp3")
         self.assertEqual(result["max_tp"], 3)
         self.assertTrue(result["closed"])
-        self.assertIsNone(result["pnl_usdt"])
-        self.assertIsNone(summarize([result], "max_tp")["profit_factor"])
+        self.assertEqual(result["pnl_usdt"], 12.0)
+        self.assertEqual(result["legs"][0]["fraction"], 1.0)
+        self.assertEqual(result["quality"], "highest_tp_full_margin_hindsight")
 
     def test_short_has_the_same_scenario_math(self):
         self.assertEqual(self.calc("partial_no_be", "tp1", "sl", direction="SHORT")["pnl_usdt"], -3.2)

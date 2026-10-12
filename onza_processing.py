@@ -118,11 +118,11 @@ def _event(cur, payload: dict, received_at: datetime | None = None) -> None:
             (str(price), accumulated, trade["message_id"]),
         )
         if index == 1:
-            # Hecho de la señal: TP1 habilita el BE hipotético. El registro base
-            # sin BE conserva el stop original y sus parciales 40/40/20.
+            # Regla de auditoría: TP1 activa y persiste BE en entrada.
+            # El registro base conserva el stop original para comparar sin BE.
             cur.execute(
-                "UPDATE tv_signals SET be_activated_at = COALESCE(be_activated_at, %s) WHERE signal_id = %s",
-                (received_at or datetime.now(timezone.utc), payload["signalId"]),
+                "UPDATE tv_signals SET be_activated_at = COALESCE(be_activated_at, %s), be_stop_price = %s WHERE signal_id = %s",
+                (received_at or datetime.now(timezone.utc), entry, payload["signalId"]),
             )
         filled[index] = True
         if index < 3:
