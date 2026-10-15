@@ -177,3 +177,32 @@ def onza_health():
                        last_onza_delivery_ms=last_row[0] if last_row else None)
     except (psycopg2.Error, RuntimeError):
         return jsonify(status="unavailable"), 503
+
+
+# Public product website: a separate read-only projection, no delivery actions.
+@app.get("/api/public/results")
+def public_results():
+    from public_results import load_public
+    from dashboard.app import INITIAL_BALANCE
+    try:
+        return jsonify(load_public(database_connection, INITIAL_BALANCE))
+    except (psycopg2.Error, RuntimeError, ValueError):
+        return jsonify(error="Registro temporalmente no disponible"), 503
+
+
+@app.get("/api/public/tickers")
+def public_tickers():
+    return bitunix_tickers()
+
+
+@app.get("/api/public/candles")
+def public_candles():
+    return bitunix_kline()
+
+
+@app.after_request
+def public_read_only_cors(response):
+    if request.path.startswith("/api/public/"):
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Cache-Control"] = "public, max-age=15"
+    return response
