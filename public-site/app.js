@@ -18,11 +18,12 @@ function renderHistory(){if(!data)return;const rows=historyRows(),body=$('histor
  tr.append(node('td',pct(r.roi_pct),r.roi_pct>=0?'positive':'negative'));const cell=node('td'),button=node('button','Ver recorrido ↗');button.addEventListener('click',()=>choose(r.signal_id));cell.append(button);tr.append(cell);body.append(tr);}
  if(!rows.length){const td=node('td','No hay cierres para estos filtros.');td.colSpan=6;body.append(node('tr'));body.lastChild.append(td);}
  $('history-count').textContent=rows.length+' cierres · página '+(page+1)+' de '+Math.max(1,Math.ceil(rows.length/10));$('previous').disabled=page===0;$('next').disabled=(page+1)*10>=rows.length;
- const points=[0];let sum=0;rows.slice().sort((a,b)=>a.closed_at.localeCompare(b.closed_at)).forEach(r=>points.push(sum+=r.pnl_usdt));drawEquity(points);
+ const points=[0];let sum=0;rows.slice().sort((a,b)=>a.closed_at.localeCompare(b.closed_at)).forEach(r=>points.push(sum+=r.pnl_usdt));drawEquity(points,data.capital_base);
 }
-function drawEquity(points){const chart=$('equity');chart.replaceChildren();const low=Math.min(0,...points),high=Math.max(0,...points),range=high-low||1,x=i=>65+i/(points.length-1||1)*860,y=v=>195-(v-low)/range*160;
- for(let i=0;i<4;i++){const value=low+range*i/3;chart.append(svg('line',{x1:65,x2:950,y1:y(value),y2:y(value),stroke:'#213349'}),svg('text',{x:0,y:y(value)+4,fill:'#8da7bf','font-size':10},money(value)));}
+function drawEquity(points,capital){const chart=$('equity');chart.replaceChildren();if(!(Number.isFinite(capital)&&capital>0)){chart.append(svg('text',{x:320,y:115,fill:'#98adc3','font-size':13},'Rendimiento no disponible: falta capital base'));return;}points=points.map(value=>value/capital*100);const low=Math.min(0,...points),high=Math.max(0,...points),range=high-low||1,x=i=>65+i/(points.length-1||1)*860,y=v=>195-(v-low)/range*160;
+ for(let i=0;i<4;i++){const value=low+range*i/3;chart.append(svg('line',{x1:65,x2:950,y1:y(value),y2:y(value),stroke:'#213349'}),svg('text',{x:0,y:y(value)+4,fill:'#8da7bf','font-size':10},pct(value)));}
  chart.append(svg('polyline',{points:points.map((v,i)=>x(i)+','+y(v)).join(' '),fill:'none',stroke:'#43ddf1','stroke-width':3}));
+ if(points.length>1)chart.append(svg('text',{x:Math.min(x(points.length-1),950),y:Math.max(18,y(points[points.length-1])-12),fill:'#43ddf1','font-size':13,'text-anchor':'end'},pct(points[points.length-1])));
  if(points.length===1)chart.append(svg('text',{x:420,y:115,fill:'#98adc3','font-size':13},'Sin cierres en la selección'));
 }
 function featuredRows(){if(!data)return [];const ids=data.featured_signal_ids||data.signals.filter(r=>!r.closed&&publicPricesVisible(r)).map(r=>r.signal_id).slice(0,4);return ids.map(id=>data.signals.find(r=>r.signal_id===id)).filter(Boolean);}
