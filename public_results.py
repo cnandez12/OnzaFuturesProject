@@ -12,8 +12,8 @@ def project_public(report, capital):
     return {'as_of':report['as_of'], 'method':'40/40/20 · BE automático tras TP1',
             'capital_base':capital,'return_pct':round(summary['pnl_usdt']/capital*100,2) if capital>0 else None,
             'summary':summary,'signals':[{key:r[key] for key in allowed} for r in report['rows']],
-            'app_url':'https://apps.apple.com/app/id6768534887','telegram_url':None,
-            'methodology':'Resultados brutos simulados a partir de alertas. TP1 realiza 40% y activa BE en entrada; TP2 realiza 40%; TP3 realiza 20%. Un cierre adverso posterior a TP1 simula la salida del remanente en entrada. No incluye comisiones, funding ni deslizamiento. El TP máximo describe el alcance y no una venta de toda la posición.'}
+            'app_url':'https://apps.apple.com/app/id6768534887','telegram_url':'https://t.me/+is8YITl6H_c2MGIy',
+            'methodology':'Resultados brutos calculados a partir de las alertas registradas. TP1 realiza 40% y activa BE en entrada; TP2 realiza 40%; TP3 realiza 20%. Un cierre adverso posterior a TP1 simula la salida del remanente en entrada. No incluye comisiones, funding ni deslizamiento. El TP máximo describe el alcance y no una venta de toda la posición.'}
 
 
 def load_public(connection, capital):
