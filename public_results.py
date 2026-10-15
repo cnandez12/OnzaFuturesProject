@@ -109,14 +109,14 @@ def project_public(report, capital, marks=None, quote_as_of=None):
             public_row['quote_as_of']=quote_as_of if performance[row['signal_id']] else None
         signals.append(public_row)
     summary = report['summary']
-    return {'as_of':report['as_of'], 'method':'40/40/20 · BE automático tras TP1',
+    return {'as_of':report['as_of'], 'method':'Resultados del registro de operaciones',
             'capital_base':capital,'return_pct':round(summary['pnl_usdt']/capital*100,2) if capital>0 else None,
             'summary':summary,'signals':signals,
             'active_preview_limit':4,'price_visibility_version':2,
             'featured_signal_ids':[r['signal_id'] for r in featured],
             'featured_policy':'Selección de destacadas: activas con TP2, TP1 y después rendimiento abierto positivo. Si faltan, se completa con cierres positivos recientes. No representa el registro completo.',
             'app_url':'https://apps.apple.com/app/id6768534887','telegram_url':'https://t.me/+is8YITl6H_c2MGIy',
-            'methodology':'Resultados brutos calculados a partir de las alertas registradas. TP1 realiza 40% y activa BE en entrada; TP2 realiza 40%; TP3 realiza 20%. Un cierre adverso posterior a TP1 simula la salida del remanente en entrada. No incluye comisiones, funding ni deslizamiento. El TP máximo describe el alcance y no una venta de toda la posición.'}
+            'methodology':'El trading de futuros conlleva un alto nivel de riesgo. El apalancamiento puede amplificar tanto las ganancias como las pérdidas, y puede ocasionar la pérdida del capital invertido. La información presentada tiene fines informativos y no constituye asesoramiento financiero. Los resultados pasados no garantizan resultados futuros. Evalúa tu situación financiera y tolerancia al riesgo antes de operar.', 'risk_disclaimer':'El trading de futuros conlleva un alto nivel de riesgo. El apalancamiento puede amplificar tanto las ganancias como las pérdidas, y puede ocasionar la pérdida del capital invertido. La información presentada tiene fines informativos y no constituye asesoramiento financiero. Los resultados pasados no garantizan resultados futuros. Evalúa tu situación financiera y tolerancia al riesgo antes de operar.'}
 
 
 def load_public(connection, capital, price_loader=None):

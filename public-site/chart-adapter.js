@@ -95,7 +95,7 @@ function openOriginalChart(row,focus=false){
   fbCandles.applyOptions({autoscaleInfoProvider:original=>publicFocusPriceRange(original(),row)});
   document.getElementById('chart-status').textContent=!publicChartCovered(row)
    ?'No se pudieron cargar las velas del recorrido completo. Pulsa Centrar operación para reintentar.' : fbState.data.length
-   ?(publicPricesVisible(row)?'Operación centrada · velas Bitunix · hora Colombia · parciales 40/40/20 con BE tras TP1. '+(fbState._publicFrameNotice||''):'Vista de mercado · los niveles y marcadores de esta señal activa están reservados. Abre la app para consultar la señal completa.')
+   ?(publicPricesVisible(row)?'Operación centrada · velas Bitunix · hora Colombia. '+(fbState._publicFrameNotice||''):'Vista de mercado · los niveles y marcadores de esta señal activa están reservados. Abre la app para consultar la señal completa.')
    :'No hay velas disponibles para este activo. Selecciona otro símbolo o temporalidad.';
  });
  return publicChartQueue;
