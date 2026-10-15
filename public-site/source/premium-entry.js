@@ -32,9 +32,9 @@ try{
  scene.environment=envTarget.texture;environment.dispose();pmrem.dispose();
  scene.add(new THREE.AmbientLight(0xffffff,.5));
  const light=new THREE.DirectionalLight(0xffffff,3);light.position.set(2,4,5);scene.add(light);
- const green=new THREE.PointLight(0x60efbb,28);green.position.set(-3,-1,2);scene.add(green);
+ const cyan=new THREE.PointLight(0x43ddf1,28);cyan.position.set(-3,-1,2);scene.add(cyan);
  const silver=new THREE.MeshStandardMaterial({color:0xd8e1e2,metalness:1,roughness:.17});
- const accent=new THREE.MeshStandardMaterial({color:0x91ecbe,metalness:.8,roughness:.25,emissive:0x173e2e,emissiveIntensity:.4});
+ const accent=new THREE.MeshStandardMaterial({color:0xa67bff,metalness:.8,roughness:.25,emissive:0x25183e,emissiveIntensity:.4});
  const sculpture=new THREE.Group();scene.add(sculpture);
  const outer=new THREE.Mesh(new THREE.TorusGeometry(1.75,.065,16,160),silver);
  outer.rotation.set(.32,-.38,.25);sculpture.add(outer);
@@ -46,7 +46,7 @@ try{
  const points=new Float32Array(180*3);
  for(let i=0;i<180;i++){const t=i*2.3999632,r=2.5+(i%11)*.08;points[i*3]=Math.cos(t)*r;points[i*3+1]=Math.sin(t)*r;points[i*3+2]=Math.sin(i)*.7;}
  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(points,3));
- const stars=new THREE.Points(geometry,new THREE.PointsMaterial({color:0xc0d8d1,size:.016,transparent:true,opacity:.4}));scene.add(stars);
+ const stars=new THREE.Points(geometry,new THREE.PointsMaterial({color:0xc0d2ef,size:.016,transparent:true,opacity:.4}));scene.add(stars);
  let visible=true,last=0,pointerX=0,pointerY=0;
  new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;},{rootMargin:'100px'}).observe(hero);
  hero.addEventListener('pointermove',event=>{const rect=hero.getBoundingClientRect();pointerX=(event.clientX-rect.left)/rect.width-.5;pointerY=(event.clientY-rect.top)/rect.height-.5;},{passive:true});
