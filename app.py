@@ -16,9 +16,11 @@ from audit_scenarios import MODES
 from audit_reporting import AUDIT_SQL, build_report
 from onza_contract import InvalidSignal, canonicalize
 from audit_log import audit
+from public_website import install_public_website
 
 
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
+install_public_website(app)
 
 BITUNIX_MARKET = "https://fapi.bitunix.com/api/v1/futures/market"
 BITUNIX_INTERVALS = frozenset({"1m", "5m", "15m", "30m", "1h", "4h", "1d"})
