@@ -19,7 +19,8 @@ async function fetchJson(path){
  if(url.pathname==='/api/chart/signals'){
   const focused=publicFocusedSignal||(data?.signals||[]).find(r=>r.signal_id===selected);
   const protectedFocus=focused&&!publicPricesVisible(focused)&&(!symbol||pair(focused.symbol)===symbol);
-  return {closed:signals.filter(r=>r.closed).map(chartRecord),open:protectedFocus?[]:signals.filter(r=>!r.closed).map(chartRecord)};
+  return {closed:signals.filter(r=>r.closed&&(!focused?.closed||r.signal_id===focused.signal_id)).map(chartRecord),
+   open:protectedFocus||focused?.closed?[]:signals.filter(r=>!r.closed).map(chartRecord)};
  }
  if(url.pathname==='/api/chart/poll')return {open_count:signals.filter(r=>!r.closed).length,
   last_closed:signals.filter(r=>r.closed).map(r=>r.closed_at).sort().at(-1)||null,
@@ -36,6 +37,14 @@ async function fetchJson(path){
 }
 let publicChartQueue=Promise.resolve(),publicChartStarted=false,publicChartGeneration=0;
 let publicFocusedSignal=null;
+function publicFittingInterval(row,interval,now=Date.now()){
+ if(!publicPricesVisible(row))return interval;
+ const duration=((row.closed_at?Date.parse(row.closed_at):now)-Date.parse(row.received_at));
+ const steps=[['1m',60000],['5m',300000],['15m',900000],['30m',1800000],['1h',3600000],['4h',14400000],['1d',86400000]];
+ const requested=steps.find(([iv])=>iv===interval);
+ if(!requested||duration/requested[1]<=1480)return interval;
+ return steps.find(([,ms])=>ms>=requested[1]&&duration/ms<=1480)?.[0]||'1d';
+}
 function publicFocusRange(row,candles,interval='15m'){
  if(!candles.length)return null;
  const offset=-5*3600,entry=Date.parse(row.received_at)/1000+offset;
@@ -58,10 +67,17 @@ function centerPublicChart(){
  fbCandles.applyOptions({autoscaleInfoProvider:original=>publicFocusPriceRange(original(),row)});
  fbChart.priceScale('right').applyOptions({autoScale:true,scaleMargins:{top:.12,bottom:.13}});
  const range=publicFocusRange(row,fbState.data,fbState.interval);
- if(range)fbChart.timeScale().setVisibleLogicalRange(range);
+ if(range){fbChart.timeScale().applyOptions({minBarSpacing:.05});fbChart.timeScale().setVisibleLogicalRange(range);}
+}
+function publicChartCovered(row){
+ if(!publicPricesVisible(row))return true;
+ const candles=fbState.data,entry=Date.parse(row.received_at)/1000-5*3600;
+ return candles.length>2&&entry>=candles[0].time-(FB_TF_MS[fbState.interval]/1000)&&entry<=candles.at(-1).time;
 }
 function openOriginalChart(row,focus=false){
  const generation=++publicChartGeneration;
+ publicFocusedSignal=row;
+ if(focus||!publicChartStarted){document.getElementById('chart-status').textContent='Cargando operación…';if(fbChart)fbClearSignals();}
  publicChartQueue=publicChartQueue.catch(()=>{}).then(async()=>{
   if(generation!==publicChartGeneration)return;
   if(typeof LightweightCharts==='undefined'){document.getElementById('chart-status').textContent='El gráfico no pudo cargar. Actualiza la página.';return;}
@@ -75,9 +91,11 @@ function openOriginalChart(row,focus=false){
    await fbLoadSignals();
    centerPublicChart();
   }else await fbLoadSignals();
+  if(generation!==publicChartGeneration)return;
   fbCandles.applyOptions({autoscaleInfoProvider:original=>publicFocusPriceRange(original(),row)});
-  document.getElementById('chart-status').textContent=fbState.data.length
-   ?(publicPricesVisible(row)?'Operación centrada · velas Bitunix · hora Colombia · parciales 40/40/20 con BE tras TP1.':'Vista de mercado · los niveles y marcadores de esta señal activa están reservados. Abre la app para consultar la señal completa.')
+  document.getElementById('chart-status').textContent=!publicChartCovered(row)
+   ?'No se pudieron cargar las velas del recorrido completo. Pulsa Centrar operación para reintentar.' : fbState.data.length
+   ?(publicPricesVisible(row)?'Operación centrada · velas Bitunix · hora Colombia · parciales 40/40/20 con BE tras TP1. '+(fbState._publicFrameNotice||''):'Vista de mercado · los niveles y marcadores de esta señal activa están reservados. Abre la app para consultar la señal completa.')
    :'No hay velas disponibles para este activo. Selecciona otro símbolo o temporalidad.';
  });
  return publicChartQueue;

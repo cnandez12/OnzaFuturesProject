@@ -253,12 +253,23 @@ function fbInitControls() {
 }
 
 async function fbLoadData() {
-  const iv = fbState.interval;
+  const generation=(fbState._dataGeneration||0)+1;fbState._dataGeneration=generation;
+  const symbol=fbState.symbol;
+  let iv = fbState.interval;
+  const focus=publicFocusedSignal;
+  const fit=focus&&pair(focus.symbol)===fbState.symbol?publicFittingInterval(focus,iv):iv;
+  fbState._publicFrameNotice=fit!==iv?`Temporalidad ajustada a ${fit} para mostrar el recorrido completo.`:'';
+  if(fit!==iv){
+    iv=fit;fbState.interval=fit;
+    document.querySelectorAll('#chartTfGroup .ct-tf').forEach(btn=>{
+      const active=btn.dataset.iv===fit;btn.classList.toggle('active',active);
+      if(active){fbState.tf=btn.dataset.tf;document.getElementById('clTf').textContent=`· ${btn.textContent}`;}
+    });
+  }
   const ms = FB_TF_MS[iv];
   if (!ms || !fbState.symbol) return;
 
   // Historical selections need candles around their own closure, even on M1.
-  const focus=publicFocusedSignal;
   const now = focus?.closed_at && pair(focus.symbol)===fbState.symbol
     ? Math.min(Date.now(),Date.parse(focus.closed_at)+Math.max(3*3600000,ms*70)) : Date.now();
   const chunkSize = FB_CHUNK;
@@ -267,12 +278,19 @@ async function fbLoadData() {
   const reqs = [];
   for (let i=0; i<chunks; i++) {
     const st = globalStart + i * chunkSize * ms;
-    const url = `${FB_REST}?symbol=${encodeURIComponent(fbState.symbol)}&interval=${iv}&startTime=${st}&endTime=${st + chunkSize*ms - 1}`;
-    reqs.push(fetch(url).then(r=>r.ok?r.json():[])
-      .then(result => Array.isArray(result) ? result : [])
-      .catch(()=>[]));
+    const url = `${FB_REST}?symbol=${encodeURIComponent(symbol)}&interval=${iv}&startTime=${st}&endTime=${st + chunkSize*ms - 1}`;
+    reqs.push(async()=>{
+      for(let attempt=0;attempt<2;attempt++){
+        try{const response=await fetch(url);if(!response.ok)throw Error('Candles unavailable');
+          const result=await response.json();if(Array.isArray(result)&&result.length)return result;
+        }catch(error){}
+      }
+      return [];
+    });
   }
-  const results = await Promise.all(reqs);
+  const results=[];
+  for(let i=0;i<reqs.length;i+=3)results.push(...await Promise.all(reqs.slice(i,i+3).map(request=>request())));
+  if(generation!==fbState._dataGeneration||symbol!==fbState.symbol||iv!==fbState.interval)return;
   const all = [];
   for (const raw of results) for (const k of raw)
     all.push({time:(Number(k.time)/1000)+(fbState.tzOff*3600),open:+k.open,high:+k.high,low:+k.low,close:+k.close,volume:+k.baseVol});
@@ -310,7 +328,9 @@ function fbRender() {
   fbChart.timeScale().fitContent();
   fbChart.timeScale().applyOptions({rightOffset:25});
   fbChart.timeScale().scrollToRealTime();
-  fbLoadSignals().then(centerPublicChart);
+  fbLoadSignals().then(()=>{centerPublicChart();
+    if(fbState._publicFrameNotice)document.getElementById('chart-status').textContent='Operación centrada · '+fbState._publicFrameNotice;
+  });
 }
 
 /* Construye/aplica los datos de las series según el tipo de gráfico.
@@ -645,6 +665,8 @@ function fbDrawSignals() {
     if (!tO) continue;
     if (isOpen && fbState.data.length) tC = fbState.data[fbState.data.length-1].time+(FB_TF_MS[fbState.interval]/1000)*8;
     if (!tC) tC = tO+86400;
+    // Never snap an entry outside this candle window onto an unrelated candle.
+    if(fbState.data.length&&(tO<fbState.data[0].time-(FB_TF_MS[fbState.interval]/1000)||tO>fbState.data.at(-1).time+(FB_TF_MS[fbState.interval]/1000)))continue;
 
     // Snap tO to nearest candle time (timeToCoordinate requires exact data times)
     let anchorCandle = null;

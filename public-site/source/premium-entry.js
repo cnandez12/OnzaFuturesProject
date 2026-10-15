@@ -66,4 +66,6 @@ try{
  document.querySelector('.orbital-visual').classList.add('has-webgl');
 }catch(error){host.classList.add('scene-fallback');}
 
-document.getElementById('chart-center').addEventListener('click',()=>centerPublicChart());
+document.getElementById('chart-center').addEventListener('click',()=>{
+ if(publicChartCovered(publicFocusedSignal))centerPublicChart();else renderChart(true);
+});

@@ -23,6 +23,9 @@ vm.runInContext(fs.readFileSync(path.join(assets,'fb-chart.js'),'utf8'),context)
  assert.equal((await context.fetchJson('/api/chart/signals?symbol=BTCUSDT')).open.length,0,'A protected selection must not show another active preview on the same symbol');
  context.selected='preview';
  assert.equal((await context.fetchJson('/api/chart/signals?symbol=BTCUSDT')).open.length,1);
+ vm.runInContext('publicFocusedSignal=data.signals[0]',context);
+ assert.equal((await context.fetchJson('/api/chart/signals?symbol=BTCUSDT')).open.length,0,'Historical selection excludes active overlays');
+ vm.runInContext('publicFocusedSignal=null',context);
  assert.equal(context.publicPricesVisible({closed:false,entry_price:100}),false,'Old API responses fail closed');
  const candleStart=Date.parse(sample.received_at)/1000-5*3600-300*900;
  const candles=Array.from({length:700},(_,i)=>({time:candleStart+i*900}));
@@ -31,6 +34,9 @@ vm.runInContext(fs.readFileSync(path.join(assets,'fb-chart.js'),'utf8'),context)
  assert.ok(frame.to-699>=65,'Leave room for all target labels');
  const scale=context.publicFocusPriceRange({priceRange:{minValue:99,maxValue:101}},sample);
  assert.equal(scale.priceRange.minValue,95);assert.equal(scale.priceRange.maxValue,108);
+ assert.equal(context.publicFittingInterval({...sample,closed_at:'2026-10-06T00:00:00Z'},'1m'),'5m');
+ assert.equal(context.publicFittingInterval({...sample,closed_at:'2026-10-08T00:00:00Z'},'1m'),'15m');
+ assert.equal(context.publicFittingInterval({closed:false,prices_visible:false},'1m'),'1m');
  const ha=context.fbToHeikinAshi([{time:1,open:100,high:110,low:90,close:105},{time:2,open:105,high:115,low:100,close:110}]);
  assert.equal(ha[0].open,102.5);assert.equal(ha[0].close,101.25);assert.equal(ha[1].open,101.875);
  assert.equal(context.fbOpenNetPct({entry_price:100,leverage:20,direction:'LONG'},102),40);
