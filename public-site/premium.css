@@ -39,3 +39,4 @@ body{background:#060d18}header{background:#060d18e8}.brand b{color:#a67bff}
 .community-section h2 em{background:linear-gradient(90deg,#43ddf1,#a67bff);background-clip:text;color:transparent}
 .stats .accent{color:#43ddf1}.positive,.live-card .level.hit{color:#41dfb5}.negative{color:#ff8c9c}
 .live-card .level.hit{background:#173f36;border-color:#256957}.chart-card .ct-tf.active{background:#628af8!important;color:#fff!important}
+.live-card p.positive{color:var(--green)}.live-card p.negative{color:var(--red)}.closed-highlight .access-label{color:var(--cyan)}
