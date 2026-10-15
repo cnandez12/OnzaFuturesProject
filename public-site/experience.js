@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('visible');observer.unobserve(entry.target);}}),{threshold:.08});
  document.querySelectorAll('.overview,.how,#resultados,#en-vivo,.cta,.faq,.methodology').forEach(el=>{if(!reduced)el.classList.add('reveal');observer.observe(el);});
  const shell=document.getElementById('public-chart-shell');
+ const defaultStats=window.matchMedia('(min-width:721px)').matches;shell.classList.toggle('show-chart-stats',defaultStats);shell.classList.toggle('hide-chart-stats',!defaultStats);document.getElementById('chart-stats-toggle').setAttribute('aria-pressed',String(defaultStats));
  document.getElementById('chart-stats-toggle').addEventListener('click',event=>{
   const shown=shell.classList.toggle('show-chart-stats');shell.classList.toggle('hide-chart-stats',!shown);event.currentTarget.setAttribute('aria-pressed',String(shown));
  });
