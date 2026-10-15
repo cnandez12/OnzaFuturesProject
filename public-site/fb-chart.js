@@ -257,7 +257,10 @@ async function fbLoadData() {
   const ms = FB_TF_MS[iv];
   if (!ms || !fbState.symbol) return;
 
-  const now = Date.now();
+  // Historical selections need candles around their own closure, even on M1.
+  const focus=publicFocusedSignal;
+  const now = focus?.closed_at && pair(focus.symbol)===fbState.symbol
+    ? Math.min(Date.now(),Date.parse(focus.closed_at)+Math.max(3*3600000,ms*70)) : Date.now();
   const chunkSize = FB_CHUNK;
   const chunks = Math.ceil(FB_CANDLES / chunkSize);
   const globalStart = now - FB_CANDLES * ms;
@@ -307,7 +310,7 @@ function fbRender() {
   fbChart.timeScale().fitContent();
   fbChart.timeScale().applyOptions({rightOffset:25});
   fbChart.timeScale().scrollToRealTime();
-  fbLoadSignals();
+  fbLoadSignals().then(centerPublicChart);
 }
 
 /* Construye/aplica los datos de las series según el tipo de gráfico.

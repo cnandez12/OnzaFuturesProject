@@ -1,6 +1,7 @@
 /* Same chart engine as the Onza dashboard, fed by the public read-only ledger. */
 const CFG={leverage:20};
 let lastMarkFetchAt=0, liveMarkPrices={};
+function publicPricesVisible(r){return !!r&&(r.closed||r.prices_visible===true);}
 function chartRecord(r){return {id:r.signal_id,symbol:pair(r.symbol),direction:r.direction,
  entry_price:r.entry_price,stop_loss:r.original_stop,tp1:r.targets[0],tp2:r.targets[1],tp3:r.targets[2],
  hit_tp1:r.max_tp>=1,hit_tp2:r.max_tp>=2,hit_tp3:r.max_tp>=3,
@@ -12,10 +13,14 @@ function fmtScenario(r){const tp=r.hit_tp3?'TP3':r.hit_tp2?'TP2':r.hit_tp1?'TP1'
  return tp+(r.close_reason?.startsWith('BE')?' · BE':r.close_reason==='SL'?' · SL':r.close_reason==='CLOSE'?' · CLOSE':'')||r.close_reason;}
 async function fetchJson(path){
  const url=new URL(path,location.origin),symbol=url.searchParams.get('symbol');
- const signals=(data?.signals||[]).filter(r=>!symbol||pair(r.symbol)===symbol);
+ const signals=(data?.signals||[]).filter(r=>publicPricesVisible(r)&&(!symbol||pair(r.symbol)===symbol));
  if(url.pathname==='/api/chart/pairs')return [...new Set((data?.signals||[]).map(r=>pair(r.symbol)))].sort().map(pair=>({pair}));
- if(url.pathname==='/api/sim/open')return (data?.signals||[]).filter(r=>!r.closed).map(r=>({pair:pair(r.symbol)}));
- if(url.pathname==='/api/chart/signals')return {closed:signals.filter(r=>r.closed).map(chartRecord),open:signals.filter(r=>!r.closed).map(chartRecord)};
+ if(url.pathname==='/api/sim/open')return (data?.signals||[]).filter(r=>!r.closed&&publicPricesVisible(r)).map(r=>({pair:pair(r.symbol)}));
+ if(url.pathname==='/api/chart/signals'){
+  const focused=publicFocusedSignal||(data?.signals||[]).find(r=>r.signal_id===selected);
+  const protectedFocus=focused&&!publicPricesVisible(focused)&&(!symbol||pair(focused.symbol)===symbol);
+  return {closed:signals.filter(r=>r.closed).map(chartRecord),open:protectedFocus?[]:signals.filter(r=>!r.closed).map(chartRecord)};
+ }
  if(url.pathname==='/api/chart/poll')return {open_count:signals.filter(r=>!r.closed).length,
   last_closed:signals.filter(r=>r.closed).map(r=>r.closed_at).sort().at(-1)||null,
   last_opened:signals.map(r=>r.received_at).sort().at(-1)||null,
@@ -29,20 +34,50 @@ async function fetchJson(path){
  }
  throw Error('Ruta pública de gráfico desconocida');
 }
-let publicChartQueue=Promise.resolve(),publicChartStarted=false;
+let publicChartQueue=Promise.resolve(),publicChartStarted=false,publicChartGeneration=0;
+let publicFocusedSignal=null;
+function publicFocusRange(row,candles,interval='15m'){
+ if(!candles.length)return null;
+ const offset=-5*3600,entry=Date.parse(row.received_at)/1000+offset;
+ const nearest=time=>candles.reduce((best,c,i)=>Math.abs(c.time-time)<Math.abs(candles[best].time-time)?i:best,0);
+ const anchor=nearest(entry),last=candles.length-1;
+ const end=row.closed_at?nearest(Date.parse(row.closed_at)/1000+offset):last;
+ const span=Math.max(1,end-anchor),left=Math.max(180,Math.min(500,span*1.3));
+ const right=Math.max(100,Math.round((left+span)*.7));
+ return {from:Math.max(-10,anchor-left),to:end+right};
+}
+function publicFocusPriceRange(base,row){
+ if(!base)return base;
+ if(!publicPricesVisible(row))return base;
+ const levels=[row.entry_price,row.original_stop,...(row.targets||[])].filter(v=>Number.isFinite(v)&&v>0);
+ if(!levels.length)return base;
+ return {...base,priceRange:{minValue:Math.min(base.priceRange.minValue,...levels),maxValue:Math.max(base.priceRange.maxValue,...levels)}};
+}
+function centerPublicChart(){
+ const row=publicFocusedSignal;if(!fbChart||!fbCandles||!row||pair(row.symbol)!==fbState.symbol)return;
+ fbCandles.applyOptions({autoscaleInfoProvider:original=>publicFocusPriceRange(original(),row)});
+ fbChart.priceScale('right').applyOptions({autoScale:true,scaleMargins:{top:.12,bottom:.13}});
+ const range=publicFocusRange(row,fbState.data,fbState.interval);
+ if(range)fbChart.timeScale().setVisibleLogicalRange(range);
+}
 function openOriginalChart(row,focus=false){
+ const generation=++publicChartGeneration;
  publicChartQueue=publicChartQueue.catch(()=>{}).then(async()=>{
+  if(generation!==publicChartGeneration)return;
   if(typeof LightweightCharts==='undefined'){document.getElementById('chart-status').textContent='El gráfico no pudo cargar. Actualiza la página.';return;}
-  if(!publicChartStarted||fbState.symbol!==pair(row.symbol)||focus){
+  const first=!publicChartStarted;
+  publicFocusedSignal=row;
+  if(first||fbState.symbol!==pair(row.symbol)||focus){
    if(!publicChartStarted){await initFBChart();publicChartStarted=true;}
-   if(fbState.symbol!==pair(row.symbol)||(focus&&fbState.interval!=='15m'))await fbOpenSymbol(pair(row.symbol));
+   if(generation!==publicChartGeneration)return;
+   if(fbState.symbol!==pair(row.symbol)||focus)await fbOpenSymbol(pair(row.symbol));
+   if(generation!==publicChartGeneration)return;
    await fbLoadSignals();
-   if(focus){const from=Date.parse(row.received_at)/1000-5*3600-3*3600;
-    const to=(row.closed_at?Date.parse(row.closed_at)/1000:Date.now()/1000)-5*3600+3*3600;
-    fbChart.timeScale().setVisibleRange({from,to:Math.max(from+6*3600,to)});}
+   centerPublicChart();
   }else await fbLoadSignals();
+  fbCandles.applyOptions({autoscaleInfoProvider:original=>publicFocusPriceRange(original(),row)});
   document.getElementById('chart-status').textContent=fbState.data.length
-   ?'Gráfico original de Onza · velas Bitunix, operaciones registradas, zonas de riesgo y objetivos. Hora Colombia. Los resultados usan parciales 40/40/20 con BE tras TP1.'
+   ?(publicPricesVisible(row)?'Operación centrada · velas Bitunix · hora Colombia · parciales 40/40/20 con BE tras TP1.':'Vista de mercado · los niveles y marcadores de esta señal activa están reservados. Abre la app para consultar la señal completa.')
    :'No hay velas disponibles para este activo. Selecciona otro símbolo o temporalidad.';
  });
  return publicChartQueue;
