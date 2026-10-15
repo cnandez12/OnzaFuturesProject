@@ -182,10 +182,10 @@ def onza_health():
 # Public product website: a separate read-only projection, no delivery actions.
 @app.get("/api/public/results")
 def public_results():
-    from public_results import load_public
+    from public_results import load_public, public_market_marks
     from dashboard.app import INITIAL_BALANCE
     try:
-        return jsonify(load_public(database_connection, INITIAL_BALANCE))
+        return jsonify(load_public(database_connection, INITIAL_BALANCE, price_loader=public_market_marks))
     except (psycopg2.Error, RuntimeError, ValueError):
         return jsonify(error="Registro temporalmente no disponible"), 503
 
