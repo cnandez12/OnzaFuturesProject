@@ -32,7 +32,7 @@ async function fetchJson(path){
 let publicChartQueue=Promise.resolve(),publicChartStarted=false;
 function openOriginalChart(row,focus=false){
  publicChartQueue=publicChartQueue.catch(()=>{}).then(async()=>{
-  if(!window.LightweightCharts){document.getElementById('chart-status').textContent='El gráfico no pudo cargar. Actualiza la página.';return;}
+  if(typeof LightweightCharts==='undefined'){document.getElementById('chart-status').textContent='El gráfico no pudo cargar. Actualiza la página.';return;}
   if(!publicChartStarted||fbState.symbol!==pair(row.symbol)||focus){
    if(!publicChartStarted){await initFBChart();publicChartStarted=true;}
    if(fbState.symbol!==pair(row.symbol)||(focus&&fbState.interval!=='15m'))await fbOpenSymbol(pair(row.symbol));
