@@ -11,6 +11,15 @@ LOCK TABLE tv_events IN SHARE MODE;
 INSERT INTO onza_delivery_policy (id, first_event_id)
 SELECT 1, COALESCE(MAX(id), 0) + 1 FROM tv_events
 ON CONFLICT (id) DO NOTHING;
+CREATE TABLE IF NOT EXISTS onza_v2_activation (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    first_event_id BIGINT NOT NULL CHECK (first_event_id > 0),
+    activated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- V2 starts with NEW signals only; keep both boundaries across restarts.
+INSERT INTO onza_v2_activation (id, first_event_id)
+SELECT 1, COALESCE(MAX(id), 0) + 1 FROM tv_events
+ON CONFLICT (id) DO NOTHING;
 """
 
 # Eligibility is evaluated BEFORE LIMIT. Hundreds of waiting updates must not
@@ -22,10 +31,12 @@ SELECT e.id, e.signal_id, e.event_type, e.payload, e.received_at,
 FROM tv_events e
 WHERE e.state IN ('pending', 'applied') AND e.onza_status='pending'
   AND e.id >= (SELECT first_event_id FROM onza_delivery_policy WHERE id=1)
+  AND e.id >= (SELECT first_event_id FROM onza_v2_activation WHERE id=1)
   AND EXISTS (
       SELECT 1 FROM tv_events en
       WHERE en.signal_id=e.signal_id AND en.event_type='entry'
         AND en.id >= (SELECT first_event_id FROM onza_delivery_policy WHERE id=1)
+        AND en.id >= (SELECT first_event_id FROM onza_v2_activation WHERE id=1)
   )
   AND NOT EXISTS (
       SELECT 1 FROM unnest(CASE e.event_type

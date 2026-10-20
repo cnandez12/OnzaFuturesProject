@@ -39,7 +39,7 @@ Para un reinicio expresamente solicitado: detener receptor y todos los workers, 
 
 Crear una **base PostgreSQL exclusiva** y configurar en un servicio nuevo las variables de `.env.example`. El dashboard y sus APIs son públicos por decisión expresa del propietario; el webhook de TradingView mantiene su propia API key. También hacen falta un bot administrador y el ID del canal Telegram nuevo, más el dominio público que el proveedor asigne al servicio. No hay credenciales ni sesiones activas copiadas a este proyecto. `setup_db.py` se niega a instalar el esquema si encuentra la tabla `trades` de otro proyecto.
 
-La API key del campo Pine debe coincidir con `TRADINGVIEW_API_KEY`. El valor por defecto del campo en esta copia del Pine está **vacío** para no duplicar credenciales en archivos. `ONZA_API_KEY` es la clave que el servidor agrega al JSON enviado a Onza; conviene que sea distinta y que nunca se escriba en Pine. El destino saliente predeterminado es `https://api.onza.tech/api/v1/webhooks/signal?source=TradingView`; se puede fijar por `ONZA_WEBHOOK_URL`.
+La API key del campo Pine debe coincidir con `TRADINGVIEW_API_KEY`. El valor por defecto del campo en esta copia del Pine está **vacío** para no duplicar credenciales en archivos. `ONZA_API_KEY` es la clave que el servidor agrega al JSON enviado a Onza; conviene que sea distinta y que nunca se escriba en Pine. El destino saliente predeterminado es `https://api.onza.tech/api/v2/webhooks/signals?source=TradingView`; se puede fijar por `ONZA_WEBHOOK_URL`.
 
 ## Ejecución
 
@@ -85,6 +85,13 @@ La API `/api/audit/results` admite `mode`, `from`, `to`, `status` (`all`, `close
 
 `setup_db.py` crea `onza_delivery_policy` y guarda una sola vez el primer ID elegible, inmediatamente después del último evento existente. El punto de inicio persiste entre reinicios. No se reenvía ningún evento histórico ni se entrega una actualización nueva de una señal cuya entrada es anterior a ese punto. Los registros históricos, su contabilidad y Telegram se conservan.
 
-La consulta de Onza filtra las dependencias confirmadas antes de aplicar el límite de 500; una tanda de actualizaciones bloqueadas no puede ocultar entradas independientes. La validación de precios y metadatos sigue en `onza_gate`. Un timeout permanece `unknown`, sin reenvío automático. No se cambia a V2 ni se modifica la clave o el plazo HTTP mientras Onza no confirme su contrato productivo.
+La consulta de Onza filtra las dependencias confirmadas antes de aplicar el límite de 500; una tanda de actualizaciones bloqueadas no puede ocultar entradas independientes. La validación de precios y metadatos sigue en `onza_gate`. Un timeout permanece `unknown`, sin reenvío automático. La migración V2 posterior se documenta en la siguiente sección; se conserva la clave productiva y el plazo HTTP.
 
 Pruebas de regresión SQL: `tests/test_onza_queue_postgres.py`, opt-in con `ONZA_QUEUE_TEST_DATABASE_URL`, utiliza únicamente tablas TEMP de la conexión y no hace solicitudes HTTP.
+
+
+## Migración productiva a V2 — 20-10-2026
+
+Se conserva `ONZA_API_KEY` de producción V1 en el JSON como `apiKey`; no se usa la credencial DEV. `onza_endpoint()` normaliza un override productivo V1 retenido hacia V2 y rechaza destinos DEV u otros hosts. No se siguen redirecciones. Solo se confirma entrega con HTTP 200, success=true, ACCEPTED/ALREADY_PROCESSED, signalId/typeSignal coincidentes, ID positivo y receivedAt UTC. El ID interno se conserva sin conversión a float en el resultado de auditoría. IGNORED_PARENT_NOT_FOUND no cuenta como entregado. Un timeout o acuse ambiguo sigue sin reenvío automático.
+
+`onza_v2_activation` conserva un corte único al instalar V2: solo entran eventos de señales cuya entrada se recibió después de ese corte. Los históricos, las señales V1 anteriores al corte, los estados unknown y la contabilidad se conservan; no se reenvían. La migración no modifica Telegram.

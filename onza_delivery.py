@@ -6,8 +6,10 @@ import os
 import json
 import time
 from typing import NamedTuple
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
+from urllib.parse import urlsplit, parse_qsl, urlencode
+import re
 
 import requests
 
@@ -17,7 +19,7 @@ from audit_log import audit
 from telegram_channels import free_text
 
 
-ONZA_URL = "https://api.onza.tech/api/v1/webhooks/signal?source=TradingView"
+ONZA_URL = "https://api.onza.tech/api/v2/webhooks/signals?source=TradingView"
 
 
 class TelegramDelivery(NamedTuple):
@@ -27,17 +29,63 @@ class TelegramDelivery(NamedTuple):
     chat_id: str | None = None
 
 
+def onza_endpoint() -> str:
+    """Migrate a retained V1 production override; never send to DEV by mistake."""
+    configured = urlsplit(os.getenv("ONZA_WEBHOOK_URL") or ONZA_URL)
+    if (configured.scheme != "https" or configured.hostname != "api.onza.tech"
+            or configured.username or configured.password or configured.port not in (None, 443)
+            or configured.path not in ("/api/v1/webhooks/signal", "/api/v2/webhooks/signals")):
+        raise ValueError("Destino productivo Onza no valido")
+    source = dict(parse_qsl(configured.query)).get("source", "TradingView")
+    return "https://api.onza.tech/api/v2/webhooks/signals?" + urlencode({"source": source})
+
+
+def onza_ack(payload: dict, response) -> tuple[str, str]:
+    """HTTP 200 alone does not establish that V2 accepted this event."""
+    if response.status_code != 200:
+        state = "unknown" if response.status_code >= 500 else "failed"
+        return state, f"Onza V2 HTTP {response.status_code}; sin confirmacion de aceptacion"
+    try:
+        body = response.json()
+    except ValueError:
+        return "unknown", "Onza V2 HTTP 200; respuesta no JSON"
+    if not isinstance(body, dict):
+        return "unknown", "Onza V2 HTTP 200; acuse no valido"
+    status = body.get("status")
+    correlated = (body.get("signalId") == payload.get("signalId")
+                  and body.get("typeSignal") == payload.get("typeSignal"))
+    if not correlated:
+        return "unknown", "Onza V2 HTTP 200; signalId/typeSignal no coinciden"
+    if status == "IGNORED_PARENT_NOT_FOUND":
+        return "failed", "Onza V2 HTTP 200; IGNORED_PARENT_NOT_FOUND; evento no aceptado"
+    if body.get("success") is not True or status not in ("ACCEPTED", "ALREADY_PROCESSED"):
+        return "unknown", "Onza V2 HTTP 200; sin estado de aceptacion valido"
+    ident = body.get("id")
+    if (type(ident) not in (str, int) or not re.fullmatch(r"[0-9]+", str(ident))
+            or int(ident) <= 0):
+        return "unknown", "Onza V2 HTTP 200; id interno no valido"
+    try:
+        received = datetime.fromisoformat(body["receivedAt"].replace("Z", "+00:00"))
+        if received.utcoffset() is None or received.utcoffset().total_seconds() != 0:
+            raise ValueError()
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return "unknown", "Onza V2 HTTP 200; receivedAt UTC no valido"
+    return "delivered", f"Onza V2 HTTP 200; {status}; id={ident}; receivedAt={received.astimezone(timezone.utc).isoformat()}"
+
+
 def post_onza(payload: dict) -> tuple[str, str]:
     key = os.getenv("ONZA_API_KEY", "")
     if not key:
         return "pending", "ONZA_API_KEY pendiente"
+    try:
+        endpoint = onza_endpoint()
+    except ValueError:
+        return "failed", "Destino productivo Onza V2 no valido; no se envio"
     outbound = dict(payload)
     outbound.pop("sourceExchange", None)
     outbound["apiKey"] = key
     try:
-        response = requests.post(
-            os.getenv("ONZA_WEBHOOK_URL", ONZA_URL), json=outbound, timeout=10
-        )
+        response = requests.post(endpoint, json=outbound, timeout=10, allow_redirects=False)
     except requests.ConnectTimeout:
         return "unknown", "Timeout de conexion; recepcion Onza no confirmada; sin reenvio automatico"
     except requests.ReadTimeout:
@@ -45,10 +93,8 @@ def post_onza(payload: dict) -> tuple[str, str]:
     except requests.Timeout:
         return "unknown", "Timeout; fase no identificada; recepcion Onza no confirmada"
     except requests.RequestException as exc:
-        return "failed", type(exc).__name__
-    if response.status_code in (200, 201):
-        return "delivered", f"HTTP {response.status_code}"
-    return "failed", f"HTTP {response.status_code}"
+        return "unknown", "Recepcion Onza no confirmada; " + type(exc).__name__
+    return onza_ack(payload, response)
 
 
 def render_event_image(payload: dict, pnl_usd: Decimal, pnl_pct: Decimal, *,

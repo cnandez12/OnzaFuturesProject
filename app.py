@@ -174,7 +174,7 @@ def onza_health():
                                AND onza_finished_at IS NOT NULL
                                ORDER BY onza_finished_at DESC LIMIT 1""")
                 last_row = cur.fetchone()
-        return jsonify(status="ok", pending=pending, rejected=rejected,
+        return jsonify(status="ok", onza_protocol="v2", pending=pending, rejected=rejected,
                        onza_pending=onza_pending,
                        last_onza_delivery_ms=last_row[0] if last_row else None)
     except (psycopg2.Error, RuntimeError):

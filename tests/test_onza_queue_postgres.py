@@ -36,8 +36,8 @@ class LiveQueueTests(unittest.TestCase):
 
     def test_more_than_500_blocked_updates_do_not_hide_ready_entry(self):
         self.boundary()
-        for i in range(1, 652):
-            self.event(i, 'blocked', 'tp2')
+        self.cur.execute("""INSERT INTO tv_events(id, signal_id, event_type, payload)
+            SELECT n,'blocked','tp2','{}'::jsonb FROM generate_series(1,651) AS n""")
         self.event(1000, 'blocked', status='unknown')
         self.event(2000, 'fresh')
         self.assertEqual(self.candidates(), [2000])
@@ -75,6 +75,20 @@ class LiveQueueTests(unittest.TestCase):
         self.event(3, 'a', 'close')
         self.event(4, 'independent')
         self.assertEqual(self.candidates(), [4])
+
+    def test_v2_cutover_excludes_v1_signals_and_persists(self):
+        self.boundary()
+        self.cur.execute('DROP TABLE pg_temp.onza_v2_activation')
+        self.event(20, 'old-v1', status='delivered')
+        self.event(21, 'old-v1', 'tp1')
+        self.boundary()
+        self.cur.execute('SELECT first_event_id FROM onza_v2_activation WHERE id=1')
+        self.assertEqual(self.cur.fetchone()['first_event_id'], 22)
+        self.event(22, 'old-v1', 'tp2')
+        self.event(23, 'v2-fresh')
+        self.assertEqual(self.candidates(), [23])
+        self.boundary()
+        self.assertEqual(self.candidates(), [23])
 
     def test_missing_policy_row_fails_closed(self):
         self.boundary()

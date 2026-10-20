@@ -67,3 +67,6 @@ El archivo `railway.toml` ya no fija un `startCommand` ni un healthcheck global.
 5. Configurar respaldo de PostgreSQL, monitoreo de procesos y alertas de fallos antes de pasar todas las temporalidades al dominio nuevo.
 
 El Pine y el receptor no prueban ejecuciones reales en Bitunix. Las estadísticas de P&L son simulaciones basadas en alertas, sin comisiones, funding, deslizamiento ni fills confirmados.
+
+
+V2 producción (20-10-2026): destino `https://api.onza.tech/api/v2/webhooks/signals?source=TradingView`; se conserva `ONZA_API_KEY` de V1 dentro del JSON como `apiKey`. Un `ONZA_WEBHOOK_URL` productivo V1 retenido se normaliza hacia V2. No copiar la clave DEV. El arranque registra una sola vez `onza_v2_activation`; no reiniciarlo ni modificarlo para reenviar eventos. `/health/onza` identifica el protocolo V2 desplegado.

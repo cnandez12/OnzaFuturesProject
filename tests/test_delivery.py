@@ -22,7 +22,10 @@ class DeliveryTests(unittest.TestCase):
 
     def test_outbound_is_exact_onza_contract_without_exchange_metadata(self):
         with patch.dict(os.environ, {"ONZA_API_KEY": "secret-for-test"}), \
-             patch("onza_delivery.requests.post", return_value=Mock(status_code=200)) as post:
+             patch("onza_delivery.requests.post", return_value=Mock(status_code=200, json=Mock(return_value={
+                 "success": True, "status": "ACCEPTED", "id": "9007199254740993",
+                 "signalId": self.payload["signalId"], "typeSignal": self.payload["typeSignal"],
+                 "receivedAt": "2026-10-20T17:00:00Z"}))) as post:
             result = post_onza(self.payload)
         self.assertEqual(result[0], "delivered")
         sent = post.call_args.kwargs["json"]
