@@ -79,3 +79,12 @@ TP1 guarda `tv_signals.be_activated_at` y `tv_signals.be_stop_price` (entrada). 
 La tabla incluye tramos, cantidades, precios, ROI, remanentes y estados de entrega por evento. La conciliación compara el escenario original con `sim_track_record`. Los eventos sin entrada o con registros inconsistentes aparecen en incidencias globales y no reciben un P&L inventado. Fechas de filtro: día de entrada en America/Bogota. El margen y el apalancamiento usados son los históricos de cada señal. La curva mide P&L acumulado de cierres, sin reinversión y sin costos. Se puede exportar el detalle de las tres lecturas en CSV y el corte completo con eventos e incidencias en JSON; las credenciales de los payloads se excluyen.
 
 La API `/api/audit/results` admite `mode`, `from`, `to`, `status` (`all`, `closed`, `open`) y `search`. Sus consultas son de solo lectura y el informe no ejecuta envíos ni reprocesa eventos.
+
+
+## Onza: cola en vivo desde la corrección del 20-10-2026
+
+`setup_db.py` crea `onza_delivery_policy` y guarda una sola vez el primer ID elegible, inmediatamente después del último evento existente. El punto de inicio persiste entre reinicios. No se reenvía ningún evento histórico ni se entrega una actualización nueva de una señal cuya entrada es anterior a ese punto. Los registros históricos, su contabilidad y Telegram se conservan.
+
+La consulta de Onza filtra las dependencias confirmadas antes de aplicar el límite de 500; una tanda de actualizaciones bloqueadas no puede ocultar entradas independientes. La validación de precios y metadatos sigue en `onza_gate`. Un timeout permanece `unknown`, sin reenvío automático. No se cambia a V2 ni se modifica la clave o el plazo HTTP mientras Onza no confirme su contrato productivo.
+
+Pruebas de regresión SQL: `tests/test_onza_queue_postgres.py`, opt-in con `ONZA_QUEUE_TEST_DATABASE_URL`, utiliza únicamente tablas TEMP de la conexión y no hace solicitudes HTTP.

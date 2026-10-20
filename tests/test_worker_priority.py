@@ -131,7 +131,7 @@ class WorkerPriorityTests(unittest.TestCase):
             claimed = worker.claim_delivery("onza")
         self.assertTrue(claimed[2])
         self.assertFalse(claimed[3])
-        self.assertIn("state IN ('pending', 'applied') AND onza_status='pending'", cursor.sql[0])
+        self.assertIn("e.state IN ('pending', 'applied') AND e.onza_status='pending'", cursor.sql[0])
 
     def test_result_claim_assigns_persistent_image_sequence(self):
         event = {"id": 8, "signal_id": "s", "event_type": "tp1",

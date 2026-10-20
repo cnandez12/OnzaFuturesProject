@@ -5,6 +5,7 @@ from pathlib import Path
 
 import psycopg2
 from dotenv import load_dotenv
+from onza_queue import POLICY_SCHEMA
 
 load_dotenv()
 
@@ -25,6 +26,7 @@ def main():
                 if cur.fetchone() is None:
                     raise SystemExit("La base pertenece a otro proyecto")
             cur.execute(schema)
+            cur.execute(POLICY_SCHEMA)
     print("Esquema Onza listo")
 
 

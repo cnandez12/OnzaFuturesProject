@@ -26,6 +26,7 @@ from onza_contract import InvalidSignal
 from onza_delivery import post_onza, post_telegram
 from onza_processing import DeferredEvent, apply_event
 from audit_log import audit, audit_wait
+from onza_queue import CLAIM_SQL as ONZA_CLAIM_SQL
 
 
 load_dotenv()
@@ -151,7 +152,7 @@ def claim_delivery(channel: str):
                     "state='applied' AND telegram_status='pending'")
     with connect() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
+            cur.execute(ONZA_CLAIM_SQL if channel == "onza" else
                 f"""SELECT id, signal_id, event_type, payload, received_at,
                            onza_status, telegram_status
                     FROM tv_events WHERE {queue_filter}
