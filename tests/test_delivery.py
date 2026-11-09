@@ -11,6 +11,9 @@ from onza_delivery import post_onza, post_telegram
 
 class DeliveryTests(unittest.TestCase):
     def setUp(self):
+        flag = patch.dict(os.environ, ONZA_ENABLED="true")
+        flag.start()
+        self.addCleanup(flag.stop)
         self.payload = canonicalize({
             "signalId": "ETHUSDT.P_1H_1790559000000",
             "typeSignal": "entry", "symbol": "ETHUSDT.P", "direction": "LONG",

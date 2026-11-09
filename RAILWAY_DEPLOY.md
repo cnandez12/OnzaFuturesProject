@@ -70,3 +70,10 @@ El Pine y el receptor no prueban ejecuciones reales en Bitunix. Las estadística
 
 
 V2 producción (20-10-2026): destino `https://api.onza.tech/api/v2/webhooks/signals?source=TradingView`; se conserva `ONZA_API_KEY` de V1 dentro del JSON como `apiKey`. Un `ONZA_WEBHOOK_URL` productivo V1 retenido se normaliza hacia V2. No copiar la clave DEV. El arranque registra una sola vez `onza_v2_activation`; no reiniciarlo ni modificarlo para reenviar eventos. `/health/onza` identifica el protocolo V2 desplegado.
+
+
+## Interruptor de Onza
+
+`ONZA_ENABLED=false` desactiva exclusivamente Onza. El valor predeterminado es false; solo `true` habilita envios. No usar 0 como API key ni URL. Conservar las credenciales en sus variables. Aplicar la variable y redesplegar todo el servicio (start.sh ejecuta setup_db.py antes de iniciar workers).
+
+La pausa marca nuevos eventos como skipped solo para Onza. Al pausar o reactivar, el arranque avanza un corte persistente y excluye pendientes anteriores; no modifica entregados, fallidos o ambiguos. Las actualizaciones de entradas anteriores al corte tampoco se envian. Reiniciar habilitado conserva el corte, para no perder cola nueva. Telegram, datos locales y dashboard continuan. /health/onza expone onza_enabled; su status ok no implica aceptacion remota. Una peticion ya en vuelo en el contenedor anterior puede terminar mientras Railway completa el reemplazo: verificar el despliegue final antes de considerar efectiva la pausa.

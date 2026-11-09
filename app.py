@@ -16,6 +16,7 @@ from audit_scenarios import MODES
 from audit_reporting import AUDIT_SQL, build_report
 from onza_contract import InvalidSignal, canonicalize
 from audit_log import audit
+from onza_control import onza_enabled, PAUSED_REASON
 from public_website import install_public_website
 
 
@@ -129,10 +130,12 @@ def tradingview_webhook():
                 if cur.fetchone() is None:
                     raise RuntimeError("La base no pertenece a Onza Futures Project")
                 cur.execute(
-                    """INSERT INTO tv_events (signal_id, event_type, payload)
-                       VALUES (%s, %s, %s) ON CONFLICT (signal_id, event_type) DO NOTHING
+                    """INSERT INTO tv_events (signal_id, event_type, payload, onza_status, onza_result)
+                       VALUES (%s, %s, %s, %s, %s) ON CONFLICT (signal_id, event_type) DO NOTHING
                        RETURNING id""",
-                    (payload["signalId"], payload["typeSignal"], Json(payload)),
+                    (payload["signalId"], payload["typeSignal"], Json(payload),
+                     "pending" if onza_enabled() else "skipped",
+                     None if onza_enabled() else PAUSED_REASON),
                 )
                 row = cur.fetchone()
                 if row is None:
@@ -174,7 +177,7 @@ def onza_health():
                                AND onza_finished_at IS NOT NULL
                                ORDER BY onza_finished_at DESC LIMIT 1""")
                 last_row = cur.fetchone()
-        return jsonify(status="ok", onza_protocol="v2", pending=pending, rejected=rejected,
+        return jsonify(status="ok", onza_protocol="v2", onza_enabled=onza_enabled(), pending=pending, rejected=rejected,
                        onza_pending=onza_pending,
                        last_onza_delivery_ms=last_row[0] if last_row else None)
     except (psycopg2.Error, RuntimeError):

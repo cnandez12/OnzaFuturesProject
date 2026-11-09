@@ -51,6 +51,11 @@ class Connection:
 
 
 class WorkerPriorityTests(unittest.TestCase):
+    def setUp(self):
+        flag = patch.dict(os.environ, ONZA_ENABLED="true")
+        flag.start()
+        self.addCleanup(flag.stop)
+
     def test_confirmed_entry_saves_telegram_parent_for_same_signal(self):
         from onza_delivery import TelegramDelivery
         cursor = Cursor({})

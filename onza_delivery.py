@@ -14,6 +14,7 @@ import re
 import requests
 
 from onza_processing import margin
+from onza_control import onza_enabled, PAUSED_REASON
 from bitunix_card import render_event_image as render_bitunix_event_image
 from audit_log import audit
 from telegram_channels import free_text
@@ -74,6 +75,8 @@ def onza_ack(payload: dict, response) -> tuple[str, str]:
 
 
 def post_onza(payload: dict) -> tuple[str, str]:
+    if not onza_enabled():
+        return "skipped", PAUSED_REASON
     key = os.getenv("ONZA_API_KEY", "")
     if not key:
         return "pending", "ONZA_API_KEY pendiente"

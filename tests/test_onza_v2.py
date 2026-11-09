@@ -9,6 +9,9 @@ from onza_delivery import ONZA_URL, onza_ack, onza_endpoint, post_onza
 
 class OnzaV2Tests(unittest.TestCase):
     def setUp(self):
+        flag = patch.dict(os.environ, ONZA_ENABLED="true")
+        flag.start()
+        self.addCleanup(flag.stop)
         self.payload = {'signalId': 'BTCUSD.P_1H_123', 'typeSignal': 'entry', 'sourceExchange': 'BINANCE'}
         self.body = {'success': True, 'status': 'ACCEPTED', 'signalId': self.payload['signalId'],
                      'typeSignal': 'entry', 'id': '79624338499702784', 'receivedAt': '2026-10-20T17:18:41.647Z'}

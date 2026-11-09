@@ -11,6 +11,11 @@ from onza_delivery import post_onza, post_telegram
 
 
 class AuditLogTests(unittest.TestCase):
+    def setUp(self):
+        flag = patch.dict(os.environ, ONZA_ENABLED="true")
+        flag.start()
+        self.addCleanup(flag.stop)
+
     def test_unchanged_wait_is_logged_once_and_changed_reason_is_logged(self):
         _waits.clear()
         with patch("audit_log.audit") as log:

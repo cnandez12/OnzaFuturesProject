@@ -27,6 +27,7 @@ from onza_delivery import post_onza, post_telegram
 from onza_processing import DeferredEvent, apply_event
 from audit_log import audit, audit_wait
 from onza_queue import CLAIM_SQL as ONZA_CLAIM_SQL
+from onza_control import onza_enabled
 
 
 load_dotenv()
@@ -141,6 +142,9 @@ def apply_pending(limit=50) -> int:
 def claim_delivery(channel: str):
     if channel not in ("onza", "telegram"):
         raise ValueError("Canal de entrega inválido")
+    if channel == "onza" and not onza_enabled():
+        audit_wait("ONZA DESACTIVADO", canal="onza", motivo="Sin envios ni reenvio del acumulado")
+        return None
     onza_ready = bool(os.getenv("ONZA_API_KEY"))
     telegram_ready = bool(os.getenv("TELEGRAM_BOT_TOKEN") and os.getenv("DESTINATION_CHANNEL_ID"))
     if (channel == "onza" and not onza_ready) or (channel == "telegram" and not telegram_ready):
@@ -255,7 +259,7 @@ def deliver_one(channel: str) -> bool:
         updates["telegram_status"] = telegram_delivery.status
         updates["telegram_result"] = telegram_delivery.detail
     result_label = {"delivered": "CONFIRMADO", "unknown": "SIN CONFIRMACION",
-                    "failed": "ERROR", "pending": "PENDIENTE"}[updates[f"{channel}_status"]]
+                    "failed": "ERROR", "pending": "PENDIENTE", "skipped": "OMITIDO"}[updates[f"{channel}_status"]]
     audit(f"{channel.upper()} {result_label}", payload, event_id,
           estado=updates[f"{channel}_status"], detalle=updates[f"{channel}_result"],
           duracion_ms=round((time.monotonic() - started) * 1000))
