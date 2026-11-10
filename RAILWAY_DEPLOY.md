@@ -77,3 +77,8 @@ V2 producción (20-10-2026): destino `https://api.onza.tech/api/v2/webhooks/sign
 `ONZA_ENABLED=false` desactiva exclusivamente Onza. El valor predeterminado es false; solo `true` habilita envios. No usar 0 como API key ni URL. Conservar las credenciales en sus variables. Aplicar la variable y redesplegar todo el servicio (start.sh ejecuta setup_db.py antes de iniciar workers).
 
 La pausa marca nuevos eventos como skipped solo para Onza. Al pausar o reactivar, el arranque avanza un corte persistente y excluye pendientes anteriores; no modifica entregados, fallidos o ambiguos. Las actualizaciones de entradas anteriores al corte tampoco se envian. Reiniciar habilitado conserva el corte, para no perder cola nueva. Telegram, datos locales y dashboard continuan. /health/onza expone onza_enabled; su status ok no implica aceptacion remota. Una peticion ya en vuelo en el contenedor anterior puede terminar mientras Railway completa el reemplazo: verificar el despliegue final antes de considerar efectiva la pausa.
+
+
+## VORZA
+
+Nuevo worker independiente: `python vorza_worker.py`, iniciado por start.sh. Configuración, pruebas, limitaciones y activación: ver VORZA_DEPLOY.md y vorza.env.example. VORZA_ENABLED=false por defecto; mantener ONZA_ENABLED=false. No activar sin clave y prueba controlada.

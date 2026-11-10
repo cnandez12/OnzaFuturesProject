@@ -160,6 +160,29 @@ def tradingview_webhook():
     return jsonify(status="queued", eventId=event_id, signalId=payload["signalId"]), 202
 
 
+@app.get("/health/vorza")
+def vorza_health():
+    from vorza_delivery import enabled, settings
+    active = enabled()
+    configured = False
+    configuration = "Sin configurar"
+    try:
+        settings()
+        configured = True
+        configuration = "Configurado"
+    except ValueError as exc:
+        configuration = str(exc)
+    try:
+        with database_connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT state,count(*) FROM vorza_deliveries GROUP BY state")
+            counts = dict(cur.fetchall())
+        return jsonify(status="ok", enabled=active, configured=configured,
+                       configuration=configuration, queue=counts,
+                       scope="entry_only", replay_paused_events=False)
+    except (psycopg2.Error, RuntimeError):
+        return jsonify(status="unavailable", enabled=active), 503
+
+
 @app.get("/health/onza")
 def onza_health():
     try:
