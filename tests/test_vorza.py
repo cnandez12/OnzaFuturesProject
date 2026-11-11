@@ -12,7 +12,7 @@ class VorzaContractTests(unittest.TestCase):
         patcher=patch.dict(os.environ,{'VORZA_ENABLED':'true','VORZA_SIGNAL_KEY':'private-test-key','VORZA_COMPANY':'TEST_CO'},clear=True)
         patcher.start();self.addCleanup(patcher.stop)
         self.config=settings();self.payload=canonicalize(RAW);self.body=adapt(self.payload,self.config)
-        self.ack={'data':{'signal_id':128,'uid':'3f6c2a9e-8d4b-4c1e-9a77-0b52d1e4f310','external_id':self.body['external_id'],'symbol':'BTCUSDT','side':'long','status':'active','expires_at':'2026-11-10T15:45:00+00:00','recipients':342,'duplicate':False}}
+        self.ack={'data':{'signal_id':128,'uid':'3f6c2a9e-8d4b-4c1e-9a77-0b52d1e4f310','external_id':self.body['external_id'],'symbol':'BTCUSDT','side':'long','status':'active','expires_at':'2026-11-10T15:45:00+00:00','recipients':342,'duplicate':False,'tp_split':[40,40,20]}}
 
     def response(self,status=200,data=None,headers=None):
         return Mock(status_code=status,json=Mock(return_value=self.ack if data is None else data),headers=headers or {})
@@ -32,6 +32,7 @@ class VorzaContractTests(unittest.TestCase):
         self.assertEqual([self.body[k] for k in ['take_profit','take_profit_2','take_profit_3']],[101,102,103])
         self.assertEqual(self.body['stop_loss'],98);self.assertEqual(self.body['leverage'],20)
         self.assertEqual(self.body['company'],'TEST_CO')
+        self.assertEqual(self.body['tp_split'],[40,40,20]);self.assertEqual(self.config.rate,10)
         for key in ['apiKey','typeSignal','signalId','roi','sourceExchange','takeProfits']:
             self.assertNotIn(key,self.body)
         self.assertNotIn('private-test-key',str(self.body))
@@ -94,6 +95,64 @@ class VorzaContractTests(unittest.TestCase):
         self.assertNotIn('private-test-key',result.detail)
 
     def test_optional_company_provider_are_omitted_as_documented(self):
-        with patch.dict(os.environ,VORZA_COMPANY='',VORZA_PROVIDER_ID='0'):
+        with patch.dict(os.environ,VORZA_COMPANY='',VORZA_PROVIDER_ID='1'):
             body=adapt(self.payload,settings())
-        self.assertNotIn('company',body);self.assertNotIn('provider_id',body)
+        self.assertEqual(body['company'],'VORZA');self.assertEqual(body['provider_id'],1)
+
+    def test_split_ack_must_match_exact_integers(self):
+        for split in [None,[0,50,50],[40,40,20.0],[40,60]]:
+            result=response_result(self.body,self.response(data={'data':dict(self.ack['data'],tp_split=split)}))
+            self.assertEqual(result.state,'retry')
+        self.assertEqual(response_result(self.body,self.response()).tp_split,(40,40,20))
+
+    def test_v11_assigned_defaults_and_limit_expiry(self):
+        with patch.dict(os.environ,{'VORZA_SIGNAL_KEY':'test'},clear=True):
+            cfg=settings()
+            self.assertEqual((cfg.provider_id,cfg.company,cfg.rate,cfg.expires),(1,'VORZA',10,20))
+            with patch.dict(os.environ,VORZA_ORDER_TYPE='limit'):
+                self.assertEqual(settings().expires,120)
+            with patch.dict(os.environ,VORZA_RATE_PER_MINUTE='11'):
+                with self.assertRaises(ValueError):settings()
+
+    def test_close_and_cancel_use_separate_endpoint_and_ack(self):
+        from vorza_delivery import action_body,send_action,CLOSE_URL
+        for action,status in [('close','closed'),('cancel','cancelled')]:
+            body=action_body(self.body['external_id'],action,'manual','Prueba interna')
+            data={'data':{'signal_id':128,'uid':self.ack['data']['uid'],'external_id':body['external_id'],
+                          'status':status,'closed_at':'2026-11-11T17:00:00Z','close_reason':'manual','open_trades_notified':2}}
+            http=Mock(return_value=self.response(data=data))
+            result=send_action(body,self.config.key,'128',self.ack['data']['uid'],transport=http)
+            self.assertEqual(result.state,'delivered');self.assertEqual(result.remote_status,status)
+            self.assertEqual(result.open_trades_notified,2)
+            self.assertEqual(http.call_args.args[0],CLOSE_URL)
+            self.assertEqual(http.call_args.kwargs['json'],body)
+            self.assertFalse(http.call_args.kwargs['allow_redirects']);self.assertEqual(http.call_args.kwargs['timeout'],15)
+
+    def test_action_contract_and_disabled_guard(self):
+        from vorza_delivery import action_body,send_action
+        import vorza_worker
+        for args in [('id','delete',None,''),('id','close','x'*41,''),('id','cancel','manual','x'*201)]:
+            with self.assertRaises(ValueError):action_body(*args)
+        http=Mock()
+        with patch.dict(os.environ,VORZA_ENABLED='false'),patch.object(vorza_worker,'connect') as database:
+            self.assertEqual(send_action(action_body('id','close'),'key','1','uid',transport=http).state,'skipped')
+            with self.assertRaises(ValueError):vorza_worker.request_action('id','cancel')
+            database.assert_not_called()
+        http.assert_not_called()
+
+    def test_action_409_never_converts_cancel_to_close(self):
+        from vorza_delivery import action_body,send_action
+        for code in ['signal_in_use','signal_not_active','signal_cancelled']:
+            http=Mock(return_value=self.response(409,data={'error':{'code':code}}))
+            result=send_action(action_body('id','cancel'),'key','1','uid',transport=http)
+            self.assertEqual(result.state,'failed');self.assertEqual(result.error_code,code)
+            self.assertEqual(http.call_count,1);self.assertEqual(http.call_args.kwargs['json']['action'],'cancel')
+
+    def test_invalid_action_ack_is_not_confirmation(self):
+        from vorza_delivery import action_body,action_result
+        body=action_body('id','close')
+        data={'signal_id':128,'uid':self.ack['data']['uid'],'external_id':'id','status':'closed',
+              'closed_at':'2026-11-11T17:00:00Z','close_reason':'opposite_signal','open_trades_notified':1}
+        for changes in [{'external_id':'wrong'},{'signal_id':129},{'status':'active'},{'closed_at':None},{'open_trades_notified':-1}]:
+            result=action_result(body,self.response(data={'data':dict(data,**changes)}),'128',data['uid'])
+            self.assertEqual(result.state,'retry')

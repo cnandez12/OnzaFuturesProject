@@ -1,56 +1,76 @@
-# Integración VORZA Signal Publishing API
+# VORZA Signal Publishing API 1.1
 
-Contrato revisado: VORZA-Signal-API.pdf, versión 1.0, noviembre 2026 (5 páginas).
+Referencia: VORZA-Signal-API (1).pdf, noviembre 2026 (6 páginas), y asignación del equipo VORZA: provider_id=1, company=VORZA y hasta 10 publicaciones por minuto.
 
-## Alcance
+## Estado y límites
 
-Se mantiene TradingView -> receptor -> procesamiento local, Telegram y dashboard. Un worker independiente publica únicamente eventos entry aplicados, usando POST https://vorza.site/api/v1/signals/publish. No enviar TP1/TP2/TP3, SL, close, ROI ni apiKey del formato Onza a esta API: el PDF no documenta actualizaciones/cancelaciones por HTTP. VORZA sigue los precios y el usuario confirma si desea copiar la señal. Una publicación no prueba una ejecución financiera.
+Mantener ONZA_ENABLED=false y VORZA_ENABLED=false hasta que el administrador confirme una audiencia interna de pruebas. No se ha realizado ninguna publicación real de prueba. La clave se configura solo en Railway como VORZA_SIGNAL_KEY; no va al repositorio, logs ni base de datos.
 
-ONZA_ENABLED debe permanecer false. No reutilizar la API key de Onza. No cambiar alertas Pine ni su URL para apuntar directamente a VORZA.
+La recepción TradingView, aplicación local de TP/SL/close, Telegram y dashboard no dependen de la respuesta VORZA. No cambiar Pine ni su URL. El worker VORZA publica entradas nuevas aplicadas y envía cierres por señal contraria de publicaciones confirmadas. TP1/TP2/TP3/SL no se publican como señales nuevas: VORZA los mide en Bitunix.
 
-## Variables Railway
+## Configuración Railway
 
-- VORZA_ENABLED=false: predeterminado, solo true habilita. Aplicar con despliegue del servicio completo.
-- VORZA_SIGNAL_KEY: clave nueva del administrador, enviada en X-Signal-Key. No se guarda en tablas ni logs.
-- VORZA_COMPANY: opcional; se omite si queda vacío y la API asigna la señal a VORZA, según el PDF. Si hay un código de empresa asignado, configurarlo exactamente. ALL solo tras decisión explícita; nunca se agrega por defecto.
-- VORZA_PROVIDER_ID: ID activo del proveedor, opcional (0/ausente lo omite).
-- VORZA_EXPIRES_MINUTES=20: vigencia solicitada, 1..1440. Confirmar antes de activar. No es un timeout HTTP ni un cierre de operación; limita cuándo copiar la señal.
-- VORZA_ORDER_TYPE=market: market o limit, confirmar cuál desea el proveedor.
-- VORZA_RATE_PER_MINUTE=20: entero 1..20. Es presupuesto de ESTE publicador, compartido entre nuestras réplicas mediante PostgreSQL. El servidor limita a 20 entre TODOS los publicadores: acordar presupuesto y reducir esta variable si existen otros emisores.
-- VORZA_NOTE: descripción sin credenciales, hasta 500 caracteres; se añade la temporalidad si cabe en ese límite.
-- VORZA_PUBLISH_URL: opcional; solo acepta exactamente el endpoint HTTPS documentado. No usar 0, HTTP, otra URL o redirecciones.
+- ONZA_ENABLED=false.
+- VORZA_ENABLED=false. Solo true habilita publicaciones y acciones. Aplicar mediante despliegue completo.
+- VORZA_SIGNAL_KEY: nueva clave secreta enviada en X-Signal-Key. No reutilizar claves Onza ni poner 0/false.
+- VORZA_PROVIDER_ID=1: asignado por VORZA, entero positivo obligatorio localmente.
+- VORZA_COMPANY=VORZA: destinatario asignado; se envía explícitamente. Para las pruebas, sustituir SOLO por el código interno confirmado por el administrador. PRUEBA es un ejemplo del PDF, no un código que podamos dar por válido. ALL nunca es predeterminado.
+- VORZA_RATE_PER_MINUTE=10: máximo local asignado; no admite valores superiores. Presupuesto compartido entre publicaciones, reintentos y acciones de todas nuestras réplicas. El servidor documenta 20 por minuto globales, pero nuestra asignación es 10.
+- VORZA_ORDER_TYPE=market: para entrada vigente. limit para un nivel futuro.
+- VORZA_EXPIRES_MINUTES=20: recomendado market 15-20, limit 60-240. Si se omite la variable, usa 20 para market y 120 para limit. Rango API 1..1440; la prueba coordinada del PDF usa 5. Esta vigencia limita copiar, no cierra posiciones.
+- VORZA_NOTE: hasta 500 caracteres; añade temporalidad si cabe.
+- VORZA_PUBLISH_URL: opcional; solo admite https://vorza.site/api/v1/signals/publish. No usar 0, HTTP ni otros hosts. El cierre usa exclusivamente https://vorza.site/api/v1/signals/close.
 
-Las variables no secretas pueden configurarse sin editar código. No copiar el nombre SIGNALS_API_KEY del servidor de VORZA en nuestra app: nuestro worker lee VORZA_SIGNAL_KEY, según el ejemplo Python del PDF.
+## Entrada y gestión 40/40/20
 
-## Adaptación
+symbol USD.P -> USDT; direction -> side minúscula; entry -> entry_price; stopLoss.price -> stop_loss; takeProfits[].price -> take_profit, take_profit_2 y take_profit_3. Se requieren exactamente tres TP para nuestro plan y se envía tp_split=[40,40,20], con porcentajes enteros. leverage se envía explícito y market=crypto (perpetuos USDT; no spot). signalId se conserva como external_id de 1..80 caracteres. La API valida que el símbolo exista en sus mercados; no se asume que todo ticker del scanner esté disponible en Bitunix.
 
-symbol USD.P -> USDT; direction -> side minúscula; entry -> entry_price; stopLoss.price -> stop_loss; takeProfits[].price -> take_profit y take_profit_2/3; leverage explícito; signalId -> external_id (1..80 caracteres). market=crypto. No presupone soporte forex: el contrato de entrada actual es cripto. Admite TP4 en el adaptador, pero el scanner actual solo genera tres. No se inventa TP4.
+Con tp_split el proveedor documenta parciales en cada TP y BE en entrada tras TP1. Sin tp_split, el plan estándar con tres TP es diferente: TP1 solo mueve BE; TP2 cierra 50%; TP3 el resto. El acuse de publicación DEBE devolver exactamente el reparto enviado. Se conserva en remote_tp_split. VORZA redondea las cantidades al lote del exchange; si un usuario cambia el número de TP, aplica su gestión estándar. No significa que cada cuenta ejecutará exactamente nuestros importes locales.
 
-## Durabilidad y no reenvío
+## Cierre y cancelación
 
-setup_db.py crea vorza_control, vorza_deliveries y vorza_attempts antes de arrancar vorza_worker.py. No se reutilizan onza_status ni tablas de entregas Onza. Primera activación y toda transición false -> true fijan un corte en MAX(tv_events.id)+1. Pausar, reiniciar pausado o reactivar excluye entregas pendientes/retry/sending; no borra el histórico ni afecta estado local/Telegram. Reiniciar habilitado preserva el corte y la cola válida. El contenido se congela al encolar: cada reintento utiliza el mismo external_id y JSON.
+POST /api/v1/signals/close con la misma clave, external_id, action close/cancel, reason código hasta 40 caracteres y note hasta 200.
 
-Solo se encolan entradas aplicadas posteriores al corte. Se descartan entradas vencidas o con actualizaciones ya aplicadas antes del primer intento. El plazo local parte de received_at + VORZA_EXPIRES_MINUTES para evitar liberar una cola antigua. La vigencia de copia devuelta por VORZA se conserva por separado. Pausar requiere redesplegar; una petición en vuelo en un contenedor anterior puede terminar hasta que Railway lo retire.
+- Close automático: exclusivamente desde un tv_event close aplicado, posterior al corte de activación, cuyo padre tenga publicación VORZA confirmada e identidad remota válida. Se envía action=close, reason=opposite_signal y nota descriptiva. Una publicación con acuse ambiguo no habilita un cierre fuera de orden. Las acciones tienen prioridad sobre nuevas publicaciones.
+- Cancel: operación explícita del operador para una señal errónea; nunca se genera automáticamente por TP/SL. VORZA solo la acepta activa y sin usuarios que la hayan copiado.
+- 404 not_found y 409 signal_in_use/signal_not_active/signal_cancelled son terminales sin reintento ni conversión automática de cancel a close. Se guarda el código para revisión.
+- Ambas acciones son idempotentes según VORZA; cada reintento conserva la misma acción, external_id y cuerpo. No se duplica una fila por sondeo ni cambia el cuerpo de una acción existente.
+- El acuse exige identidad remota del padre, external_id exacto, status closed/cancelled acorde con la acción, closed_at con zona, close_reason y open_trades_notified no negativo. Se guardan por separado de la publicación y de las finanzas locales.
 
-Timeout 15 segundos, redirecciones deshabilitadas. Reintentos persistentes: red, acuse 200 inválido, 429 y 5xx, con 5/15/60 segundos y máximo 6 intentos dentro del plazo local. 429 bloquea todas nuestras réplicas al menos 60 segundos; respeta Retry-After numérico superior. Un 400/401/404/3xx termina sin reintento. 503 signals_api_disabled exige contactar al administrador; los intentos son limitados. Agotar intentos ambiguos produce unknown, nunca delivered. Un sending interrumpido se recupera después de 60 segundos con la misma identidad; no hay reenvíos ilimitados.
+CLI local autorizada, sin endpoint público de modificación:
 
-## Confirmación y observabilidad
+    python vorza_action.py --external-id ID_REAL --action cancel --reason manual --note "Publicacion por error"
+    python vorza_action.py --external-id ID_REAL --action close --reason manual --note "Revision del proveedor"
 
-Solo HTTP 200 con data correlacionado, signal_id válido, uid UUID, external_id exacto, símbolo y dirección iguales, duplicate booleano, recipients entero no negativo y expires_at con zona horaria confirma entrega. duplicate=true es éxito idempotente. recipients=0 queda publicado pero genera advertencia; no significa entrega a usuarios. El acuse y cada intento quedan registrados sin clave/cuerpos HTTP completos. Las respuestas de error se reducen a códigos documentados, sin volcar mensajes que pudieran contener secretos.
+Solo encola si VORZA está habilitado en entorno y base y existe publicación confirmada. El worker hace HTTP después. La CLI no activa VORZA, no llama al servidor directamente y no permite reescribir ni reenviar una acción antigua. Revisar los fallos en vorza_actions antes de cualquier conciliación manual.
 
-GET /health/vorza expone enabled, configured, motivo de configuración y conteos por estado. status=ok indica disponibilidad local, no publicación exitosa ni copia ejecutada. No se expone la clave. El hostname público de marketing no permite este endpoint interno.
+## Qué NO significa close
 
-## Pruebas antes de activar
+Close retira la posibilidad de copiar, cancela entradas limit pendientes y notifica a quienes tengan posición abierta. NO cierra automáticamente sus posiciones. Cada usuario decide. No altera las estadísticas de VORZA: siguen midiéndose con los niveles originales desde publicación y hasta 7 días. Se usa Bitunix de 1 minuto; SL y TP1 en la misma vela cuenta como SL. Tras TP1, retorno a entrada o último TP termina el seguimiento. Nuestros resultados locales pueden diferir por fuente, hora de inicio, política de cierre y ajustes del usuario. No se cambiaron los cálculos locales para igualarlos artificialmente.
 
-1. Obtener la clave; company y provider_id solo si aplica. Confirmar order_type, vigencia y presupuesto global de frecuencia.
-2. Preguntar por API de actualizaciones/cierres, BE y parciales 40/40/20: el PDF no promete ninguno de estos controles. Mantenerlos en auditoría local no los ejecuta en VORZA.
-3. Ejecutar unit tests y PostgreSQL con tablas TEMP. Ninguna prueba automatizada llama al servidor VORZA.
-4. Acordar con administrador una audiencia de prueba. El PDF NO proporciona sandbox; no enviar una señal TEST a todos los usuarios. Una prueba coordinada puede usar expires_in_minutes=1 y note=TEST, siguiendo su guía; el administrador la cancela desde su panel.
-5. Confirmar señal en app, destinatarios, ausencia de duplicados al repetir la MISMA prueba autorizada y señal rechazada con credencial inválida solo si se acuerda.
-6. Activar solo señales nuevas con VORZA_ENABLED=true y revisar acuses. No vaciar el corte ni reenviar el historial.
+## Durabilidad, pausa y reintentos
 
-## Comandos de verificación
+setup_db.py crea/migra vorza_control, vorza_deliveries, vorza_attempts, vorza_actions y vorza_action_attempts antes de iniciar el worker. Se preserva la cola 1.0 y el historial Onza. Primera activación y transición false -> true fijan MAX(tv_events.id)+1. Pausa, reinicio pausado o reactivación excluyen trabajos pending/retry/sending de ambas colas. No se borra historial ni se toca el estado local/Telegram. Reiniciar habilitado conserva el corte y cola válida.
 
-python -B -m unittest discover -s tests
+Entradas vencidas o ya avanzadas antes del primer intento se excluyen. El plazo local de publicación es recepción + vigencia configurada, separado de expires_at remoto. Solo los eventos close nuevos posteriores al corte son elegibles: no se acumulan cierres de la pausa. Un cierre nuevo puede referirse a una publicación anterior confirmada. Las acciones tienen un plazo LOCAL de una hora y máximo 6 intentos; no es una limitación de la API. Una petición en vuelo del contenedor anterior puede terminar hasta que Railway lo retire.
 
-Tests SQL opt-in: VORZA_TEST_DATABASE_URL. Usan exclusivamente tablas TEMP en la sesión y nunca HTTP. No apuntar pruebas de publicación real a producción sin coordinación.
+Timeout 15 segundos, sin redirecciones. Reintentos persistentes red/200 sin acuse válido/429/5xx con 5,15,60 segundos y máximo 6 intentos dentro del plazo local. 429 bloquea ambas colas y réplicas al menos 60 segundos, respetando Retry-After numérico superior. 400/401/404/409/3xx no se reintentan. 503 signals_api_disabled exige revisar con administrador. Agotar ambigüedad produce unknown, nunca delivered. Sending interrumpido se recupera tras 60 segundos con la misma identidad y cuerpo.
+
+Cada intento se guarda sin secretos ni cuerpos HTTP completos. No hay cambios en onza_status, trades, sim_track_record ni Telegram por enviar una acción externa. El presupuesto global de intentos está protegido por bloqueo transaccional en PostgreSQL.
+
+## Salud y pruebas de aceptación
+
+GET /health/vorza: api_version=1.1, enabled, configured, motivo de configuración, scope=publish_close_cancel, tp_split=[40,40,20], rate_limit=10, queue y action_queue. status=ok mide disponibilidad local, NO copia de posiciones ni recepción remota. El host de marketing no permite este endpoint interno.
+
+Antes de activar:
+
+1. Obtener código de audiencia interna confirmado por administrador; no usar company=VORZA para pruebas que notifiquen a clientes reales.
+2. Guardar VORZA_SIGNAL_KEY solo en Railway y configurar audiencia de pruebas; mantener proveedor 1 y límite 10.
+3. Ejecutar pruebas locales y SQL TEMP; ninguna prueba automatizada envía HTTP real.
+4. Coordinar publicación market de 5 minutos, mismo external_id repetido (duplicate=true), niveles inválidos (invalid_levels), reparto inválido (invalid_tp_split), y close/cancel en señales de prueba separadas. Verificar 409 al cancelar una señal ya copiada solo con cuentas internas.
+5. Comprobar reparto, BE, llegada a app y notificaciones con el administrador. Aceptación de una señal no implica confirmación del usuario para copiarla.
+6. Una vez aprobadas las pruebas, usar company=VORZA y VORZA_ENABLED=true mediante despliegue, solo señales nuevas. No reiniciar cortes ni liberar históricos.
+
+    python -B -m unittest discover -s tests
+
+SQL opt-in: VORZA_TEST_DATABASE_URL. Exclusivamente tablas TEMP en la sesión, sin modificar datos productivos ni HTTP. La clave compartida por el usuario no fue usada en las pruebas ni guardada en archivos del repositorio.

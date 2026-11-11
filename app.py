@@ -176,9 +176,12 @@ def vorza_health():
         with database_connection() as conn, conn.cursor() as cur:
             cur.execute("SELECT state,count(*) FROM vorza_deliveries GROUP BY state")
             counts = dict(cur.fetchall())
+            cur.execute("SELECT state,count(*) FROM vorza_actions GROUP BY state")
+            actions = dict(cur.fetchall())
         return jsonify(status="ok", enabled=active, configured=configured,
-                       configuration=configuration, queue=counts,
-                       scope="entry_only", replay_paused_events=False)
+                       configuration=configuration, queue=counts, action_queue=actions,
+                       api_version="1.1", scope="publish_close_cancel",
+                       tp_split=[40,40,20], rate_limit=10, replay_paused_events=False)
     except (psycopg2.Error, RuntimeError):
         return jsonify(status="unavailable", enabled=active), 503
 

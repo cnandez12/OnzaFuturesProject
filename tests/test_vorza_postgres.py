@@ -51,10 +51,10 @@ class VorzaQueueSQLTests(unittest.TestCase):
         self.assertIsNone(claim(self.cur,20))
 
     def test_rate_budget_is_persistent(self):
-        for n in range(21):self.job(n+1,str(n))
-        for n in range(20):self.assertIsNotNone(claim(self.cur,20))
+        for n in range(11):self.job(n+1,str(n))
+        for n in range(10):self.assertIsNotNone(claim(self.cur,20))
         self.assertIsNone(claim(self.cur,20))
-        self.cur.execute('SELECT count(*) FROM vorza_attempts');self.assertEqual(self.cur.fetchone()['count'],20)
+        self.cur.execute('SELECT count(*) FROM vorza_attempts');self.assertEqual(self.cur.fetchone()['count'],10)
 
     def test_429_blocks_other_jobs_and_schedules_retry(self):
         self.job(1,'one');self.job(2,'two');job=claim(self.cur,20)
@@ -108,8 +108,81 @@ class VorzaQueueSQLTests(unittest.TestCase):
         self.cur.execute('SELECT payload FROM vorza_deliveries')
         rows=self.cur.fetchall();self.assertEqual(len(rows),1)
         self.assertEqual(rows[0]['payload']['external_id'],payload['signalId'])
-        self.assertNotIn('test-secret',str(rows));self.assertNotIn('company',rows[0]['payload'])
+        self.assertNotIn('test-secret',str(rows));self.assertEqual(rows[0]['payload']['company'],'VORZA')
 
     def test_unapplied_entries_never_reach_publish_queue(self):
         self.event(1,'waiting');self.cur.execute("UPDATE tv_events SET state='pending'")
         self.cur.execute(ENTRY_SQL);self.assertEqual(self.cur.fetchall(),[])
+
+    def parent(self,n=1,sid='live'):
+        ident=self.job(n,sid,'delivered')
+        self.cur.execute("UPDATE vorza_deliveries SET remote_id='128',remote_uid='3f6c2a9e-8d4b-4c1e-9a77-0b52d1e4f310',remote_status='active' WHERE id=%s",(ident,))
+        return ident
+
+    def action(self,parent,sid='live',kind='close'):
+        from vorza_delivery import action_body
+        self.cur.execute("""INSERT INTO vorza_actions(delivery_id,external_id,action,payload,deadline)
+         VALUES (%s,%s,%s,%s,now()+interval '1 hour') RETURNING id""",(parent,sid,kind,Json(action_body(sid,kind))))
+        return self.cur.fetchone()['id']
+
+    def test_close_event_waits_for_confirmed_parent_and_keeps_exact_id(self):
+        from vorza_queue import ACTION_EVENT_SQL
+        self.event(2,'live','close');self.job(1)
+        self.cur.execute(ACTION_EVENT_SQL);self.assertEqual(self.cur.fetchall(),[])
+        self.cur.execute("UPDATE vorza_deliveries SET state='delivered',remote_id='128',remote_uid='3f6c2a9e-8d4b-4c1e-9a77-0b52d1e4f310'")
+        with patch.object(vorza_worker,'connect',return_value=self.conn):
+            vorza_worker.enqueue_actions();vorza_worker.enqueue_actions()
+        self.cur.execute('SELECT external_id,action,payload,event_id FROM vorza_actions')
+        rows=self.cur.fetchall();self.assertEqual(len(rows),1);row=rows[0]
+        self.assertEqual(row['payload']['external_id'],'live');self.assertEqual(row['payload']['reason'],'opposite_signal')
+        self.assertEqual(row['action'],'close');self.assertEqual(row['event_id'],2)
+
+    def test_action_pause_and_resume_excludes_accumulated_close(self):
+        from vorza_queue import claim_action
+        parent=self.parent();self.action(parent)
+        configure(self.cur,False);configure(self.cur,True)
+        self.assertIsNone(claim_action(self.cur,10))
+        self.cur.execute('SELECT state FROM vorza_actions');self.assertEqual(self.cur.fetchone()['state'],'skipped')
+
+    def test_close_and_publish_share_rate_budget(self):
+        from vorza_queue import claim_action
+        for i in range(10):
+            parent=self.parent(i+1,'s'+str(i));self.action(parent,'s'+str(i))
+        for i in range(10):self.assertIsNotNone(claim_action(self.cur,10))
+        self.job(20,'new-publish')
+        self.assertIsNone(claim(self.cur,10))
+
+    def test_close_ack_persisted_without_changing_local_trade_state(self):
+        from vorza_queue import claim_action,finish_action
+        self.event(1,'live');parent=self.parent();self.action(parent)
+        job=claim_action(self.cur,10)
+        result=Result('delivered','confirmed',200,'128','3f6c2a9e-8d4b-4c1e-9a77-0b52d1e4f310',remote_status='closed',closed_at='2026-11-11T17:00:00Z',close_reason='opposite_signal',open_trades_notified=3)
+        self.assertEqual(finish_action(self.cur,job,result),'delivered')
+        self.cur.execute('SELECT remote_status,close_reason,open_trades_notified FROM vorza_actions')
+        self.assertEqual(tuple(self.cur.fetchone().values()),('closed','opposite_signal',3))
+        self.cur.execute('SELECT state,telegram_status,onza_status FROM tv_events')
+        self.assertEqual(tuple(self.cur.fetchone().values()),('applied','pending','skipped'))
+
+    def test_conflict_is_terminal_without_automatic_fallback(self):
+        from vorza_queue import claim_action,finish_action
+        parent=self.parent();self.action(parent,kind='cancel');job=claim_action(self.cur,10)
+        finish_action(self.cur,job,Result('failed','conflict',409,error_code='signal_in_use'))
+        self.assertIsNone(claim_action(self.cur,10))
+        self.cur.execute('SELECT action,state,error_code FROM vorza_actions')
+        self.assertEqual(tuple(self.cur.fetchone().values()),('cancel','failed','signal_in_use'))
+
+    def test_action_retries_preserve_payload_and_stop_at_max(self):
+        from vorza_queue import claim_action,finish_action
+        parent=self.parent();self.action(parent);first=claim_action(self.cur,10)
+        finish_action(self.cur,first,Result('retry','timeout'))
+        self.cur.execute("UPDATE vorza_actions SET next_attempt_at=now(),attempts=5")
+        retry=claim_action(self.cur,10);self.assertEqual(retry['payload'],first['payload'])
+        self.assertEqual(finish_action(self.cur,retry,Result('retry','timeout')),'unknown')
+        self.assertIsNone(claim_action(self.cur,10))
+
+    def test_pause_during_action_http_preserves_skipped_state(self):
+        from vorza_queue import claim_action,finish_action
+        parent=self.parent();self.action(parent);job=claim_action(self.cur,10)
+        configure(self.cur,False)
+        result=Result('delivered','confirmed',200,'128','3f6c2a9e-8d4b-4c1e-9a77-0b52d1e4f310',remote_status='closed',closed_at='2026-11-11T17:00:00Z',close_reason='close',open_trades_notified=0)
+        self.assertEqual(finish_action(self.cur,job,result),'skipped')
