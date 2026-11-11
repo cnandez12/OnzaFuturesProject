@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS tv_events (
     received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     applied_at TIMESTAMPTZ,
     state TEXT NOT NULL DEFAULT 'pending',
-    onza_status TEXT NOT NULL DEFAULT 'pending',
+    onza_status TEXT NOT NULL DEFAULT 'skipped',
     onza_started_at TIMESTAMPTZ,
     onza_finished_at TIMESTAMPTZ,
     telegram_status TEXT NOT NULL DEFAULT 'pending',
@@ -138,3 +138,6 @@ FROM tv_events tp, tv_events en
 WHERE tp.signal_id = s.signal_id AND tp.event_type = 'tp1' AND tp.state = 'applied'
   AND en.signal_id = s.signal_id AND en.event_type = 'entry' AND en.state = 'applied'
   AND (s.be_activated_at IS NULL OR s.be_stop_price IS DISTINCT FROM (en.payload->>'entry')::numeric);
+
+-- Historical delivery columns remain read-only for audit compatibility.
+ALTER TABLE tv_events ALTER COLUMN onza_status SET DEFAULT 'skipped';

@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 from PIL import Image
 
 from bitunix_card import DESIGN_COUNT, design_number, render_event_image, template_path
-from onza_delivery import post_telegram, _event_amount
+from telegram_delivery import post_telegram, _event_amount
 
 
 class BitunixCardsTests(unittest.TestCase):
@@ -74,9 +74,9 @@ class BitunixCardsTests(unittest.TestCase):
         response = Mock(status_code=200)
         response.json.return_value = {"ok": True, "result": {"message_id": 458, "chat": {"id": -1}}}
         with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test", "DESTINATION_CHANNEL_ID": "-1"}), \
-             patch("onza_delivery._event_amount", return_value=(Decimal("1"), Decimal("5"))), \
-             patch("onza_delivery.render_event_image", return_value=b"jpeg-data") as render, \
-             patch("onza_delivery.requests.post", return_value=response) as send:
+             patch("telegram_delivery._event_amount", return_value=(Decimal("1"), Decimal("5"))), \
+             patch("telegram_delivery.render_event_image", return_value=b"jpeg-data") as render, \
+             patch("telegram_delivery.requests.post", return_value=response) as send:
             result = post_telegram(event, {"telegram_entry_message_id": 123, "telegram_chat_id": "-1"}, image_sequence=27)
         self.assertEqual(result[0], "delivered")
         self.assertEqual(render.call_args.kwargs["image_sequence"], 27)
@@ -89,7 +89,7 @@ class BitunixCardsTests(unittest.TestCase):
 
     def test_result_without_entry_message_never_posts(self):
         with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test", "DESTINATION_CHANNEL_ID": "-1"}), \
-             patch("onza_delivery.requests.post") as send:
+             patch("telegram_delivery.requests.post") as send:
             result = post_telegram({"typeSignal": "tp1"}, {})
         self.assertEqual(result.status, "pending")
         send.assert_not_called()

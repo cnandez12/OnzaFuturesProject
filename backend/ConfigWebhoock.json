@@ -18,17 +18,6 @@
       "url": "https://api2.wsasesor.cloud/api/v1/signals/webhook",
       "close_url": "https://api2.wsasesor.cloud/api/v1/signals/webhook/close",
       "secret": ""
-    },
-    {
-      "id": "onza_futures",
-      "name": "Onza Futures",
-      "active": false,
-      "format": "onza",
-      "url": "https://api.onza.tech/api/v1/webhooks/signal?source=TradingView",
-      "secret": "",
-      "api_key": "",
-      "timeframe": "15M",
-      "message": "ONZA AI CRYPTOFUTURES"
     }
   ]
 }

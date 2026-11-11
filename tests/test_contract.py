@@ -5,7 +5,7 @@ from decimal import Decimal
 from PIL import Image
 
 from onza_contract import InvalidSignal, canonicalize, internal_pair
-from onza_delivery import render_event_image
+from telegram_delivery import render_event_image
 from onza_processing import pnl_piece
 
 

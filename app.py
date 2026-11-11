@@ -16,7 +16,7 @@ from audit_scenarios import MODES
 from audit_reporting import AUDIT_SQL, build_report
 from onza_contract import InvalidSignal, canonicalize
 from audit_log import audit
-from onza_control import onza_enabled, PAUSED_REASON
+from retire_legacy_delivery import RETIRED_REASON
 from public_website import install_public_website
 
 
@@ -134,8 +134,7 @@ def tradingview_webhook():
                        VALUES (%s, %s, %s, %s, %s) ON CONFLICT (signal_id, event_type) DO NOTHING
                        RETURNING id""",
                     (payload["signalId"], payload["typeSignal"], Json(payload),
-                     "pending" if onza_enabled() else "skipped",
-                     None if onza_enabled() else PAUSED_REASON),
+                     "skipped", RETIRED_REASON),
                 )
                 row = cur.fetchone()
                 if row is None:
@@ -150,9 +149,6 @@ def tradingview_webhook():
                     audit("TV DUPLICADO", payload, http=200, accion="Sin repetir entregas")
                     return jsonify(status="duplicate", signalId=payload["signalId"]), 200
                 event_id = row[0]
-                # Se emite al confirmar la transacción; despierta al despachador
-                # sin esperar el siguiente sondeo de respaldo.
-                cur.execute("NOTIFY onza_events")
     except (psycopg2.Error, RuntimeError) as exc:
         audit("TV ERROR AL GUARDAR", payload, http=503, error=type(exc).__name__)
         return jsonify(error="Base de datos no disponible"), 503
@@ -184,30 +180,6 @@ def vorza_health():
                        tp_split=[40,40,20], rate_limit=10, replay_paused_events=False)
     except (psycopg2.Error, RuntimeError):
         return jsonify(status="unavailable", enabled=active), 503
-
-
-@app.get("/health/onza")
-def onza_health():
-    try:
-        with database_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) FROM tv_events WHERE state = 'pending'")
-                pending = cur.fetchone()[0]
-                cur.execute("SELECT COUNT(*) FROM tv_events WHERE state = 'rejected'")
-                rejected = cur.fetchone()[0]
-                cur.execute("""SELECT COUNT(*) FROM tv_events WHERE onza_status = 'pending'
-                               AND state IN ('pending', 'applied')""")
-                onza_pending = cur.fetchone()[0]
-                cur.execute("""SELECT ROUND(EXTRACT(EPOCH FROM (onza_finished_at - received_at)) * 1000)::int
-                               FROM tv_events WHERE onza_status = 'delivered'
-                               AND onza_finished_at IS NOT NULL
-                               ORDER BY onza_finished_at DESC LIMIT 1""")
-                last_row = cur.fetchone()
-        return jsonify(status="ok", onza_protocol="v2", onza_enabled=onza_enabled(), pending=pending, rejected=rejected,
-                       onza_pending=onza_pending,
-                       last_onza_delivery_ms=last_row[0] if last_row else None)
-    except (psycopg2.Error, RuntimeError):
-        return jsonify(status="unavailable"), 503
 
 
 # Public product website: a separate read-only projection, no delivery actions.

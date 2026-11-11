@@ -5,22 +5,22 @@ Copia independiente del motor de Señales Smart Crypto, del dashboard de futuros
 ## Flujo
 
 1. TradingView llama al endpoint público con el JSON del Pine. El servidor autentica `apiKey`, valida y normaliza `USDT.P` a `USD.P`, **persiste el evento mínimo para deduplicar** en PostgreSQL y responde `202`. Este paso evita un POST externo dentro del límite de respuesta de TradingView.
-2. `worker.py onza` recibe una notificación de PostgreSQL, verifica entrada y orden de TP y tiene prioridad para iniciar el envío. Si se pierde la notificación, revisa la cola cada 500 ms. El contrato normalizado sale sin `sourceExchange`.
-3. `worker.py process` aplica los eventos válidos cuando empieza el intento de Onza o cuando transcurre un segundo desde la recepción, lo que ocurra primero. No espera respuesta de Onza. Al registrar TP1 guarda `tv_signals.be_activated_at`, sin cambiar el stop base. Cada combinación `signalId` + `typeSignal` se procesa una vez.
-4. `worker.py telegram` publica los eventos aplicados independientemente del estado de Onza. Mantiene el orden de publicación de la señal y registra cualquier bloqueo local. TP1, TP2, TP3, SL y cierre rotan los 25 diseños de `assets/bitunix/card_templates/`, con versiones Long 20X y Short 20X. `tv_events.image_sequence` conserva el diseño en reintentos.
+2. `worker.py process` aplica los eventos locales sin esperar a ningún proveedor externo. TP1 conserva la activación BE para comparar escenarios.
+3. `worker.py telegram` publica los eventos aplicados y conserva las referencias de mensajes y el orden de publicación por señal. Sus imágenes y reglas de distribución se mantienen.
+4. `vorza_worker.py` es el único publicador externo de señales: contrato VORZA 1.1, parciales 40/40/20 y cierre/cancelación. Permanece desactivado hasta confirmar audiencia interna. Ver `VORZA_DEPLOY.md`.
 5. El dashboard se sirve desde Flask en `/`. La vista base mantiene la simulación 40/40/20 **sin BE**. En escritorio, `Auditoría` aparece en el menú lateral; en móvil se abre desde `Más → Auditoría de escenarios`. Allí se elige entre parciales sin BE, parciales con BE tras TP1 y TP más alto alcanzado. La distribución de Auditoría es fija 40/40/20; los porcentajes editables de `Simulador` pertenecen a otra simulación y no cambian estos tres modos. La vista de TP máximo no asigna P&L. Los cálculos usan el margen guardado por señal para entradas nuevas.
 
 ## Alcance de la auditoría
 
-Los logs JSON de `audit_log.py` incluyen hora de Colombia (-05:00), etapa, evento, signalId, símbolo, dirección y temporalidad. Etapas: TV PETICION RECIBIDA, TV VALIDADO, TV GUARDADO EN COLA, ONZA ENVIO INICIADO, ONZA CONFIRMADO/SIN CONFIRMACION/ERROR, PROCESAMIENTO GUARDADO, IMAGEN GENERADA y TELEGRAM CONFIRMADO/ERROR. Se registran duración, fase del timeout y message_id de Telegram; nunca se imprime el payload completo ni claves. Las esperas se registran una vez por evento y de nuevo si cambia el motivo. El seguimiento de estas esperas se reinicia al arrancar cada worker y conserva hasta 20.000 casos.
+Los logs JSON de `audit_log.py` incluyen hora de Colombia (-05:00), etapa, evento, signalId, símbolo, dirección y temporalidad. Etapas: TV PETICION RECIBIDA, TV VALIDADO, TV GUARDADO EN COLA, VORZA RESULTADO, VORZA ACCION RESULTADO, PROCESAMIENTO GUARDADO, IMAGEN GENERADA y TELEGRAM CONFIRMADO/ERROR. Se registran duración, fase del timeout y message_id de Telegram; nunca se imprime el payload completo ni claves. Las esperas se registran una vez por evento y de nuevo si cambia el motivo. El seguimiento de estas esperas se reinicia al arrancar cada worker y conserva hasta 20.000 casos.
 
-Al desplegar esta versión, los eventos válidos pendientes de Telegram por timeout de Onza quedan habilitados automáticamente. No se reenvían a Onza los eventos unknown/sending: siguen requiriendo conciliación. Los eventos rechazados localmente, faltantes de entrada/TP previo o publicaciones Telegram fallidas/ambiguas requieren revisión explícita. Un HTTP 200/201 confirma el webhook de Onza, no una ejecución de trading.
+El webhook saliente antiguo fue retirado, no solo desactivado: no existe cliente HTTP, rol de trabajador, URL ni API key productiva para ese proveedor. Las columnas de entrega antiguas se conservan exclusivamente como historial; eventos nuevos quedan skipped. No se borran datos de señales, balances ni publicaciones Telegram.
 
 - **Sin BE:** TP1/TP2/TP3 cierran 40/40/20 y el remanente conserva el SL original.
 - **Con BE:** después de TP1, el 60% restante se modela con stop en entrada. `be_activated_at` representa la activación de esa regla, **no un fill**. Si llega una alerta de SL o cierre adverso tras TP1, el cálculo atribuye al remanente un BE teórico y lo marca como inferido. Un regreso a entrada entre alertas puede no detectarse, por lo que incluso un TP posterior puede sobreestimar el resultado de este escenario.
 - **TP máximo:** registra TP1, TP2 o TP3 según el máximo comunicado por TradingView, sin suponer que se vendió toda la posición a ese precio.
 
-El endpoint público `GET /api/audit/results?mode=partial_no_be|partial_be|max_tp` calcula las tres lecturas desde los eventos aplicados. La vista incluye conteos de BE activado, inferencias y casos sin recorrido verificable. No hay datos de ejecución real, comisiones, funding, slippage, liquidaciones o gaps de Bitunix; por eso el P&L y el profit factor son **brutos teóricos**, no una certificación de rentabilidad en vivo. El JSON Pine→receptor→Onza conserva el formato existente; los nuevos campos de auditoría quedan internos en PostgreSQL.
+El endpoint público `GET /api/audit/results?mode=partial_no_be|partial_be|max_tp` calcula las tres lecturas desde los eventos aplicados. La vista incluye conteos de BE activado, inferencias y casos sin recorrido verificable. No hay datos de ejecución real, comisiones, funding, slippage, liquidaciones o gaps de Bitunix; por eso el P&L y el profit factor son **brutos teóricos**, no una certificación de rentabilidad en vivo. El JSON Pine→receptor conserva el formato de entrada existente; los nuevos campos de auditoría quedan internos en PostgreSQL.
 
 ## Estructura
 
@@ -31,26 +31,26 @@ Para un reinicio expresamente solicitado: detener receptor y todos los workers, 
 - `backend/`: copia del código, imágenes, fuentes y pruebas originales para referencia. Su bot de Telegram no forma parte del arranque nuevo.
 - `dashboard/`: copia del dashboard adaptada a señales de TradingView.
 - `FB_AI_SCANNER_ONZA_WEBHOOK_ONLY.pine`: indicador para crear las alertas nuevas.
-- `app.py`, `worker.py`, `onza_contract.py`, `onza_processing.py`, `onza_delivery.py`: receptor, despacho prioritario y procesamiento local.
+- `app.py`, `worker.py`, `onza_contract.py`, `onza_processing.py`, `telegram_delivery.py`: receptor, procesamiento local y publicación Telegram. Los nombres internos históricos de contrato y tablas se conservan por compatibilidad; no contactan al antiguo proveedor.
 - `schema.sql`: tablas nuevas y tablas compatibles con el dashboard.
 - `RAILWAY_DEPLOY.md`: configuración por servicio y verificación de entrega.
 
 ## Configuración pendiente
 
-Crear una **base PostgreSQL exclusiva** y configurar en un servicio nuevo las variables de `.env.example`. El dashboard y sus APIs son públicos por decisión expresa del propietario; el webhook de TradingView mantiene su propia API key. También hacen falta un bot administrador y el ID del canal Telegram nuevo, más el dominio público que el proveedor asigne al servicio. No hay credenciales ni sesiones activas copiadas a este proyecto. `setup_db.py` se niega a instalar el esquema si encuentra la tabla `trades` de otro proyecto.
+Crear una **base PostgreSQL exclusiva** y configurar en un servicio nuevo las variables de `runtime.env.example`. El dashboard y sus APIs son públicos por decisión expresa del propietario; el webhook de TradingView mantiene su propia API key. También hacen falta un bot administrador y el ID del canal Telegram nuevo, más el dominio público que el proveedor asigne al servicio. No hay credenciales ni sesiones activas copiadas a este proyecto. `setup_db.py` se niega a instalar el esquema si encuentra la tabla `trades` de otro proyecto.
 
-La API key del campo Pine debe coincidir con `TRADINGVIEW_API_KEY`. El valor por defecto del campo en esta copia del Pine está **vacío** para no duplicar credenciales en archivos. `ONZA_API_KEY` es la clave que el servidor agrega al JSON enviado a Onza; conviene que sea distinta y que nunca se escriba en Pine. El destino saliente predeterminado es `https://api.onza.tech/api/v2/webhooks/signals?source=TradingView`; se puede fijar por `ONZA_WEBHOOK_URL`.
+La API key del campo Pine debe coincidir con `TRADINGVIEW_API_KEY`. El valor por defecto del campo en esta copia del Pine está **vacío** para no duplicar credenciales en archivos. La clave del nuevo receptor externo es `VORZA_SIGNAL_KEY`, exclusivamente en el servidor. No reutilizar credenciales antiguas.
 
 ## Ejecución
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env
+cp runtime.env.example .env
 # Completar .env con los destinos NUEVOS.
 bash start.sh
 ```
 
-`start.sh` sirve para una instalación de un solo contenedor: aplica el esquema idempotente y arranca Flask, Onza, procesamiento y Telegram como procesos separados. En Railway se recomienda separarlos en servicios con los comandos de `RAILWAY_DEPLOY.md`. Telegram queda pendiente si Onza no confirmó el mismo evento. Un estado `unknown`, `failed` o `sending` de Onza exige conciliación manual antes de cualquier reenvío; no se dispara una segunda orden automáticamente.
+`start.sh` sirve para una instalación de un solo contenedor: aplica el esquema idempotente y arranca Flask, VORZA, procesamiento y Telegram como procesos separados. En Railway se recomienda separarlos en servicios con los comandos de `RAILWAY_DEPLOY.md`. Telegram queda pendiente si Onza no confirmó el mismo evento. Un estado `unknown`, `failed` o `sending` de Onza exige conciliación manual antes de cualquier reenvío; no se dispara una segunda orden automáticamente.
 
 La URL para las alertas de TradingView será `https://DOMINIO-NUEVO/webhook/tradingview`, con condición **Any alert() function call** y el Pine de esta carpeta. Las alertas creadas con el código anterior no cambian al sustituir el indicador: deben recrearse o cambiar su URL al servidor nuevo. Verificar una señal y su `signalId` en Onza antes de redirigir la lista completa.
 

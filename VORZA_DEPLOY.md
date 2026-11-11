@@ -4,13 +4,12 @@ Referencia: VORZA-Signal-API (1).pdf, noviembre 2026 (6 páginas), y asignación
 
 ## Estado y límites
 
-Mantener ONZA_ENABLED=false y VORZA_ENABLED=false hasta que el administrador confirme una audiencia interna de pruebas. No se ha realizado ninguna publicación real de prueba. La clave se configura solo en Railway como VORZA_SIGNAL_KEY; no va al repositorio, logs ni base de datos.
+Mantener VORZA_ENABLED=false hasta que el administrador confirme una audiencia interna de pruebas. No se ha realizado ninguna publicación real de prueba. La clave se configura solo en Railway como VORZA_SIGNAL_KEY; no va al repositorio, logs ni base de datos.
 
 La recepción TradingView, aplicación local de TP/SL/close, Telegram y dashboard no dependen de la respuesta VORZA. No cambiar Pine ni su URL. El worker VORZA publica entradas nuevas aplicadas y envía cierres por señal contraria de publicaciones confirmadas. TP1/TP2/TP3/SL no se publican como señales nuevas: VORZA los mide en Bitunix.
 
 ## Configuración Railway
 
-- ONZA_ENABLED=false.
 - VORZA_ENABLED=false. Solo true habilita publicaciones y acciones. Aplicar mediante despliegue completo.
 - VORZA_SIGNAL_KEY: nueva clave secreta enviada en X-Signal-Key. No reutilizar claves Onza ni poner 0/false.
 - VORZA_PROVIDER_ID=1: asignado por VORZA, entero positivo obligatorio localmente.
@@ -74,3 +73,7 @@ Antes de activar:
     python -B -m unittest discover -s tests
 
 SQL opt-in: VORZA_TEST_DATABASE_URL. Exclusivamente tablas TEMP en la sesión, sin modificar datos productivos ni HTTP. La clave compartida por el usuario no fue usada en las pruebas ni guardada en archivos del repositorio.
+
+## Retiro del proveedor anterior
+
+No existe cliente HTTP ni proceso para el antiguo webhook. La configuración de ese publicador ya no tiene efecto y debe retirarse de Railway. Se preservan solo el historial de auditoría y nombres internos de contrato/tablas por compatibilidad. El backend de referencia no se inicia con el servicio; su sumidero antiguo quedó sin red.

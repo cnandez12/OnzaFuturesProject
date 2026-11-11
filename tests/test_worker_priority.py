@@ -57,10 +57,10 @@ class WorkerPriorityTests(unittest.TestCase):
         self.addCleanup(flag.stop)
 
     def test_confirmed_entry_saves_telegram_parent_for_same_signal(self):
-        from onza_delivery import TelegramDelivery
+        from telegram_delivery import TelegramDelivery
         cursor = Cursor({})
         payload = {"signalId": "signal-A", "typeSignal": "entry"}
-        with patch.object(worker, "claim_delivery", return_value=(7, payload, False, True, None, None, None)), \
+        with patch.object(worker, "claim_delivery", return_value=(7, payload, None, None, None)), \
              patch.object(worker, "post_telegram", return_value=TelegramDelivery("delivered", "HTTP 200", 458, "-100123")), \
              patch.object(worker, "connect", return_value=Connection(cursor)):
             self.assertTrue(worker.deliver_one("telegram"))
@@ -68,30 +68,20 @@ class WorkerPriorityTests(unittest.TestCase):
         self.assertEqual(cursor.params[index], (458, "-100123", "signal-A"))
         self.assertIn("telegram_message_id", cursor.sql[0])
 
-    def test_local_event_is_applied_without_calling_onza(self):
-        event = {"id": 7, "payload": {"signalId": "s", "typeSignal": "entry"}, "received_at": None}
-        cursor = Cursor(event)
-        cursor.fetchall = lambda: [(7,)]
-        cursor.fetchone = lambda: event
-        with patch.object(worker, "connect", return_value=Connection(cursor)), \
-             patch.object(worker, "apply_event") as apply, \
-             patch.object(worker, "post_onza") as onza:
-            self.assertEqual(worker.apply_pending(), 1)
-        apply.assert_called_once_with(cursor, event["payload"], None)
-        onza.assert_not_called()
-        self.assertTrue(any("state='applied'" in sql for sql in cursor.sql))
+    def test_local_event_is_applied_without_downstream_http(self):
+        event={"id":7,"payload":{"signalId":"s","typeSignal":"entry"},"received_at":None}
+        cursor=Cursor(event)
+        cursor.fetchall=lambda:[(7,)]
+        cursor.fetchone=lambda:event
+        with patch.object(worker,'connect',return_value=Connection(cursor)),patch.object(worker,'apply_event') as apply,patch.object(worker,'post_telegram') as telegram:
+            self.assertEqual(worker.apply_pending(),1)
+        apply.assert_called_once_with(cursor,event['payload'],None)
+        telegram.assert_not_called()
 
-    def test_onza_rejection_does_not_reject_telegram_or_local_processing(self):
-        event = {"id": 7, "signal_id": "s", "event_type": "entry",
-                 "payload": {}, "onza_status": "pending", "telegram_status": "pending"}
-        cursor = Cursor(event)
-        with patch.dict(os.environ, {"ONZA_API_KEY": "test"}), \
-             patch.object(worker, "connect", return_value=Connection(cursor)), \
-             patch.object(worker, "onza_gate", return_value=(False, "Onza no acepta el evento")):
-            self.assertIsNone(worker.claim_delivery("onza"))
-        update = next(sql for sql in cursor.sql if "UPDATE tv_events" in sql)
-        self.assertNotIn("state=", update)
-        self.assertNotIn("telegram_status=", update)
+    def test_retired_channel_cannot_be_reenabled_by_environment(self):
+        with patch.dict(os.environ,ONZA_ENABLED='true',ONZA_API_KEY='test'),patch.object(worker,'connect') as database:
+            with self.assertRaises(ValueError):worker.claim_delivery('onza')
+        database.assert_not_called()
 
     def test_telegram_preserves_local_predecessor_order(self):
         event = {"id": 8, "signal_id": "s", "event_type": "tp1",
@@ -107,8 +97,8 @@ class WorkerPriorityTests(unittest.TestCase):
         cursor = Cursor({})
         with patch.object(worker, "connect", return_value=Connection(cursor)):
             self.assertEqual(worker.apply_pending(), 0)
-        self.assertIn("onza_started_at IS NOT NULL", cursor.sql[0])
-        self.assertIn("interval '1 second'", cursor.sql[0])
+        self.assertNotIn("onza_started_at", cursor.sql[0])
+        self.assertNotIn("interval '1 second'", cursor.sql[0])
         self.assertNotIn("onza_status", cursor.sql[0])
 
     def test_telegram_claim_is_independent_of_every_onza_status(self):
@@ -122,21 +112,15 @@ class WorkerPriorityTests(unittest.TestCase):
                          patch.object(worker, "connect", return_value=Connection(cursor)):
                         claimed = worker.claim_delivery("telegram")
                     self.assertIsNotNone(claimed)
-                    self.assertFalse(claimed[2])
-                    self.assertTrue(claimed[3])
+                    self.assertEqual(claimed[0],7)
                     self.assertIn("state='applied' AND telegram_status='pending'", cursor.sql[0])
                     self.assertNotIn("AND onza_status=", cursor.sql[0])
 
-    def test_onza_claim_never_claims_telegram_in_same_worker(self):
-        event = {"id": 7, "signal_id": "s", "event_type": "entry",
-                 "payload": {}, "onza_status": "pending", "telegram_status": "pending"}
-        cursor = Cursor(event)
-        with patch.dict(os.environ, {"ONZA_API_KEY": "test"}), \
-             patch.object(worker, "connect", return_value=Connection(cursor)):
-            claimed = worker.claim_delivery("onza")
-        self.assertTrue(claimed[2])
-        self.assertFalse(claimed[3])
-        self.assertIn("e.state IN ('pending', 'applied') AND e.onza_status='pending'", cursor.sql[0])
+    def test_retired_worker_role_exits_before_database_or_network(self):
+        import sys
+        with patch.object(sys,'argv',['worker.py','onza']),patch.object(worker,'connect') as database:
+            with self.assertRaises(SystemExit):worker.main()
+        database.assert_not_called()
 
     def test_result_claim_assigns_persistent_image_sequence(self):
         event = {"id": 8, "signal_id": "s", "event_type": "tp1",
@@ -145,7 +129,7 @@ class WorkerPriorityTests(unittest.TestCase):
         with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test", "DESTINATION_CHANNEL_ID": "-1"}), \
              patch.object(worker, "connect", return_value=Connection(cursor)):
             claimed = worker.claim_delivery("telegram")
-        self.assertEqual(claimed[5], 1)
+        self.assertEqual(claimed[3], 1)
         self.assertTrue(any("COALESCE(image_sequence, nextval('bitunix_card_rotation_seq'))" in sql
                             for sql in cursor.sql))
 

@@ -1436,14 +1436,8 @@ def _onza_roi(sim, price: float) -> float:
     return round(move * 100 * LEVERAGE, 2)
 
 def _post_onza_event(client: dict, payload: dict):
-    try:
-        resp = requests.post(client["url"], json=payload, timeout=10)
-        if resp.status_code in (200, 201):
-            log_message("INFO", f"[{client['name']}] {payload.get('typeSignal')} {payload.get('symbol')} → {resp.status_code}")
-        else:
-            log_message("WARNING", f"[{client['name']}] {payload.get('typeSignal')} respondió {resp.status_code}: {resp.text[:150]}")
-    except Exception as e:
-        log_message("ERROR", f"[{client['name']}] Error enviando {payload.get('typeSignal')}: {e}")
+    """Retired destination: this compatibility sink never performs network I/O."""
+    return None
 
 def _skip_onza_event_if_blacklisted(sim, event_name: str) -> bool:
     if not is_onza_free_blacklisted(sim.pair):

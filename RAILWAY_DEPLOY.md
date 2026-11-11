@@ -30,7 +30,6 @@ El registro mínimo anterior al envío es necesario para reconocer reintentos de
 1. Una cuenta/proyecto Railway y esta carpeta como fuente del servicio (repositorio Git privado o despliegue local mediante Railway CLI).
 2. Una base **PostgreSQL nueva** y exclusiva dentro del proyecto. Usar su `DATABASE_URL` privado en los servicios; no usar la base de Smart Crypto Signals.
 3. `TRADINGVIEW_API_KEY`: secreto del receptor, idéntico al campo `API Key` del indicador.
-4. `ONZA_API_KEY` y `ONZA_WEBHOOK_URL`: credenciales y destino saliente que Onza confirmó. No guardar secretos en el repositorio ni en el Pine de muestra.
 5. El dashboard y sus APIs son públicos por decisión expresa del propietario. No configurar `DASHBOARD_TOKEN`.
 6. Bot de Telegram administrador del canal nuevo: `TELEGRAM_BOT_TOKEN` y `DESTINATION_CHANNEL_ID`. Telegram puede activarse después de verificar Onza.
 7. Valores acordados para `INITIAL_BALANCE` y `MARGIN_PER_TRADE`. La simulación registra el margen usado por cada señal nueva.
@@ -42,7 +41,6 @@ Crear cuatro servicios desde la **misma carpeta raíz** y una base PostgreSQL. C
 | Servicio | Start Command | Variables principales | Red pública |
 |---|---|---|---|
 | `onza-web` | `python setup_db.py && gunicorn app:app --bind 0.0.0.0:${PORT:-5000} --workers 2 --timeout 30` | `DATABASE_URL`, `TRADINGVIEW_API_KEY`, `INITIAL_BALANCE`, `MARGIN_PER_TRADE` | Sí |
-| `onza-dispatch` | `python worker.py onza` | `DATABASE_URL`, `ONZA_API_KEY`, `ONZA_WEBHOOK_URL` | No |
 | `onza-process` | `python worker.py process` | `DATABASE_URL`, `INITIAL_BALANCE`, `MARGIN_PER_TRADE` | No |
 | `onza-telegram` | `python worker.py telegram` | `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, `DESTINATION_CHANNEL_ID` | No |
 
@@ -69,15 +67,11 @@ El archivo `railway.toml` ya no fija un `startCommand` ni un healthcheck global.
 El Pine y el receptor no prueban ejecuciones reales en Bitunix. Las estadísticas de P&L son simulaciones basadas en alertas, sin comisiones, funding, deslizamiento ni fills confirmados.
 
 
-V2 producción (20-10-2026): destino `https://api.onza.tech/api/v2/webhooks/signals?source=TradingView`; se conserva `ONZA_API_KEY` de V1 dentro del JSON como `apiKey`. Un `ONZA_WEBHOOK_URL` productivo V1 retenido se normaliza hacia V2. No copiar la clave DEV. El arranque registra una sola vez `onza_v2_activation`; no reiniciarlo ni modificarlo para reenviar eventos. `/health/onza` identifica el protocolo V2 desplegado.
 
 
-## Interruptor de Onza
+## Retiro del webhook antiguo
 
-`ONZA_ENABLED=false` desactiva exclusivamente Onza. El valor predeterminado es false; solo `true` habilita envios. No usar 0 como API key ni URL. Conservar las credenciales en sus variables. Aplicar la variable y redesplegar todo el servicio (start.sh ejecuta setup_db.py antes de iniciar workers).
-
-La pausa marca nuevos eventos como skipped solo para Onza. Al pausar o reactivar, el arranque avanza un corte persistente y excluye pendientes anteriores; no modifica entregados, fallidos o ambiguos. Las actualizaciones de entradas anteriores al corte tampoco se envian. Reiniciar habilitado conserva el corte, para no perder cola nueva. Telegram, datos locales y dashboard continuan. /health/onza expone onza_enabled; su status ok no implica aceptacion remota. Una peticion ya en vuelo en el contenedor anterior puede terminar mientras Railway completa el reemplazo: verificar el despliegue final antes de considerar efectiva la pausa.
-
+El trabajador y el cliente HTTP anteriores fueron eliminados. No configurar variables ni procesos de publicación del proveedor retirado. Las tablas y columnas históricas no se borran; el arranque marca pending antiguos como skipped y deja inactiva la marca de control histórica. VORZA es el único canal externo de señales, con su interruptor independiente.
 
 ## VORZA
 

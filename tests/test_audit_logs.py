@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 import requests
 from audit_log import audit, audit_wait, _waits
-from onza_delivery import post_onza, post_telegram
+from telegram_delivery import post_telegram
 
 
 class AuditLogTests(unittest.TestCase):
@@ -38,14 +38,12 @@ class AuditLogTests(unittest.TestCase):
         self.assertNotIn("SECRET", output.getvalue())
         self.assertTrue(row["hora"].endswith("-05:00"))
 
-    def test_onza_timeout_phase_is_recorded(self):
-        for error, phase in ((requests.ConnectTimeout, "conexion"), (requests.ReadTimeout, "lectura")):
-            with patch.dict(os.environ, {"ONZA_API_KEY": "SECRET"}), \
-                 patch("onza_delivery.requests.post", side_effect=error("SECRET")):
-                status, detail = post_onza({})
-            self.assertEqual(status, "unknown")
-            self.assertIn(phase, detail)
-            self.assertNotIn("SECRET", detail)
+    def test_telegram_timeout_does_not_leak_secret(self):
+        payload=dict(typeSignal='entry',symbol='BTCUSD.P',direction='LONG',timeframe='15M',entry=100,leverage=20,takeProfits=[],stopLoss={'price':99},signalId='sample')
+        with patch.dict(os.environ,TELEGRAM_BOT_TOKEN='SECRET',DESTINATION_CHANNEL_ID='-1'),patch('telegram_delivery.requests.post',side_effect=requests.ReadTimeout('SECRET')):
+            result=post_telegram(payload,None)
+        self.assertEqual(result.status,'unknown')
+        self.assertNotIn('SECRET',result.detail)
 
     def test_telegram_http_200_without_ok_is_not_delivery(self):
         payload = {"symbol": "BTCUSD.P", "direction": "LONG", "typeSignal": "entry",
@@ -54,5 +52,5 @@ class AuditLogTests(unittest.TestCase):
         response = Mock(status_code=200)
         response.json.return_value = {"ok": False}
         with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "SECRET", "DESTINATION_CHANNEL_ID": "-1"}), \
-             patch("onza_delivery.requests.post", return_value=response):
+             patch("telegram_delivery.requests.post", return_value=response):
             self.assertEqual(post_telegram(payload, None)[0], "failed")

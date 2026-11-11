@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import requests
 
 from onza_contract import canonicalize
-from onza_delivery import post_onza, post_telegram
+from telegram_delivery import post_telegram
 
 
 class DeliveryTests(unittest.TestCase):
@@ -23,25 +23,15 @@ class DeliveryTests(unittest.TestCase):
             "timeframe": "1H",
         })
 
-    def test_outbound_is_exact_onza_contract_without_exchange_metadata(self):
-        with patch.dict(os.environ, {"ONZA_API_KEY": "secret-for-test"}), \
-             patch("onza_delivery.requests.post", return_value=Mock(status_code=200, json=Mock(return_value={
-                 "success": True, "status": "ACCEPTED", "id": "9007199254740993",
-                 "signalId": self.payload["signalId"], "typeSignal": self.payload["typeSignal"],
-                 "receivedAt": "2026-10-20T17:00:00Z"}))) as post:
-            result = post_onza(self.payload)
-        self.assertEqual(result[0], "delivered")
-        sent = post.call_args.kwargs["json"]
-        self.assertEqual(sent["symbol"], "ETHUSD.P")
-        self.assertEqual(sent["message"], "ONZA AI CRYPTOFUTURES")
-        self.assertEqual(sent["apiKey"], "secret-for-test")
-        self.assertNotIn("sourceExchange", sent)
+    def test_old_sender_is_no_longer_importable(self):
+        import importlib.util
+        self.assertIsNone(importlib.util.find_spec('onza_delivery'))
 
-    def test_timeout_is_ambiguous_and_not_reported_as_rejected(self):
-        with patch.dict(os.environ, {"ONZA_API_KEY": "secret-for-test"}), \
-             patch("onza_delivery.requests.post", side_effect=requests.Timeout):
-            status, _ = post_onza(self.payload)
-        self.assertEqual(status, "unknown")
+    def test_old_channel_is_rejected_before_database_access(self):
+        import worker
+        with patch.object(worker,'connect') as database:
+            with self.assertRaises(ValueError):worker.claim_delivery('onza')
+        database.assert_not_called()
 
     def test_main_tp_captions_match_approved_example(self):
         opened = datetime(2026,10,2,12,0,tzinfo=timezone.utc)
@@ -52,8 +42,8 @@ class DeliveryTests(unittest.TestCase):
             response = Mock(status_code=200)
             response.json.return_value = {"ok":True,"result":{"message_id":13,"chat":{"id":-1}}}
             with patch.dict(os.environ,{"TELEGRAM_BOT_TOKEN":"test","DESTINATION_CHANNEL_ID":"-1"}), \
-                 patch("onza_delivery.render_event_image",return_value=b"image"), \
-                 patch("onza_delivery.requests.post",return_value=response) as post:
+                 patch("telegram_delivery.render_event_image",return_value=b"image"), \
+                 patch("telegram_delivery.requests.post",return_value=response) as post:
                 result = post_telegram(payload,trade,event_time=opened+timedelta(minutes=93))
             self.assertEqual(result.status,"delivered")
             data = post.call_args.kwargs["data"]
