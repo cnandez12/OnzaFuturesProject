@@ -22,6 +22,7 @@ class TelegramDelivery(NamedTuple):
     detail: str
     message_id: int | None = None
     chat_id: str | None = None
+    retry_after: int = 0
 
 
 def render_event_image(payload: dict, pnl_usd: Decimal, pnl_pct: Decimal, *,
@@ -118,6 +119,12 @@ def post_telegram(payload: dict, trade: dict | None, *,
         return TelegramDelivery("unknown", f"HTTP {response.status_code}; respuesta Telegram no interpretable")
     if not isinstance(body, dict):
         return TelegramDelivery("unknown", f"HTTP {response.status_code}; respuesta Telegram inesperada")
+    if response.status_code == 429 and body.get("ok") is False:
+        # An explicit rejection was not delivered; repeating it after retry_after is safe.
+        parameters = body.get("parameters")
+        wait = parameters.get("retry_after") if isinstance(parameters, dict) else None
+        wait = wait if type(wait) is int and 0 < wait <= 2147483647 else 60
+        return TelegramDelivery("pending", "HTTP 429; espera indicada por Telegram", retry_after=wait)
     if response.status_code == 200 and body.get("ok") is True:
         result = body.get("result")
         if not isinstance(result, dict):

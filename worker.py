@@ -23,6 +23,7 @@ from dotenv import load_dotenv
 from telegram_policy import closing_suppression
 from onza_contract import InvalidSignal
 from telegram_delivery import post_telegram
+from telegram_rate import ready as telegram_ready, defer as telegram_defer, SPACING_SECONDS
 from onza_processing import DeferredEvent, apply_event
 from audit_log import audit, audit_wait
 
@@ -109,6 +110,8 @@ def claim_delivery(channel: str):
         audit_wait("CONFIGURACION PENDIENTE",canal="telegram",motivo="Faltan variables del canal")
         return None
     with connect() as conn,conn.cursor(cursor_factory=RealDictCursor) as cur:
+        if not telegram_ready(cur):
+            return None
         cur.execute("""SELECT id,signal_id,event_type,payload,received_at,telegram_status
          FROM tv_events WHERE state='applied' AND telegram_status='pending'
          ORDER BY id LIMIT 500 FOR UPDATE SKIP LOCKED""")
@@ -138,6 +141,7 @@ def claim_delivery(channel: str):
                     cur.execute("UPDATE tv_events SET telegram_status='pending' WHERE id=%s",(event['id'],))
                     audit_wait('TELEGRAM EN ESPERA',event['payload'],event['id'],motivo='Falta referencia al mensaje de entrada')
                     continue
+            telegram_defer(cur, SPACING_SECONDS)
             return event['id'],event['payload'],trade,image_sequence,event.get('received_at')
     return None
 
@@ -162,6 +166,8 @@ def deliver_one(channel: str) -> bool:
         with connect() as conn,conn.cursor() as cur:
             cur.execute("""UPDATE tv_events SET telegram_status=%s,telegram_result=%s,
              telegram_message_id=%s WHERE id=%s""",(result.status,result.detail,result.message_id,event_id))
+            if result.retry_after:
+                telegram_defer(cur, result.retry_after)
             if payload['typeSignal']=='entry' and result.status=='delivered':
                 cur.execute("UPDATE tv_signals SET telegram_entry_message_id=%s,telegram_chat_id=%s WHERE signal_id=%s",
                             (result.message_id,result.chat_id,payload['signalId']))

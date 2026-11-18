@@ -113,7 +113,7 @@ class WorkerPriorityTests(unittest.TestCase):
                         claimed = worker.claim_delivery("telegram")
                     self.assertIsNotNone(claimed)
                     self.assertEqual(claimed[0],7)
-                    self.assertIn("state='applied' AND telegram_status='pending'", cursor.sql[0])
+                    self.assertTrue(any("state='applied' AND telegram_status='pending'" in sql for sql in cursor.sql))
                     self.assertNotIn("AND onza_status=", cursor.sql[0])
 
     def test_retired_worker_role_exits_before_database_or_network(self):

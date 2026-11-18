@@ -33,6 +33,18 @@ class DeliveryTests(unittest.TestCase):
             with self.assertRaises(ValueError):worker.claim_delivery('onza')
         database.assert_not_called()
 
+    def test_telegram_429_waits_for_server_deadline_with_safe_fallback(self):
+        for params, expected in [({"retry_after": 77},77), ({"retry_after": True},60), ({},60), (None,60)]:
+            with self.subTest(parameters=params):
+                response = Mock(status_code=429)
+                response.json.return_value = {"ok": False, "parameters": params}
+                with patch.dict(os.environ, TELEGRAM_BOT_TOKEN="test", DESTINATION_CHANNEL_ID="-1"), \
+                     patch("telegram_delivery.requests.post", return_value=response):
+                    result = post_telegram(self.payload, None)
+                self.assertEqual(result.status, "pending")
+                self.assertEqual(result.retry_after, expected)
+                self.assertIsNone(result.message_id)
+
     def test_main_tp_captions_match_approved_example(self):
         opened = datetime(2026,10,2,12,0,tzinfo=timezone.utc)
         for kind in ("tp1", "tp2", "tp3"):
