@@ -1,7 +1,7 @@
 """Procesa la cola durable y publica sin bloquear a TradingView.
 
 Una respuesta HTTP ambigua queda en 'unknown' o 'sending'. No se reintenta
-automáticamente para evitar órdenes duplicadas en Onza.
+automáticamente para evitar publicaciones duplicadas en Telegram.
 """
 
 from __future__ import annotations
@@ -36,12 +36,29 @@ def connect():
     return psycopg2.connect(url, connect_timeout=5)
 
 
+# A scan continues past deferred rows; restarting safely begins another sweep.
+# Delivery channels keep their own persisted statuses and replay boundaries.
+_process_after_id = 0
+
+
 def apply_pending(limit=50) -> int:
+    global _process_after_id
+    if limit < 1:
+        raise ValueError("El lote debe contener al menos un evento")
     with connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(f"""SELECT id FROM tv_events WHERE state = 'pending'
-                           ORDER BY id LIMIT %s""", (limit,))
+            scan_sql = """SELECT id FROM tv_events WHERE state = 'pending'
+                           AND id > %s ORDER BY id LIMIT %s"""
+            cur.execute(scan_sql, (_process_after_id, limit))
             ids = [row[0] for row in cur.fetchall()]
+            if not ids and _process_after_id:
+                # Retry dependencies completed in a later batch without starving
+                # entries with higher IDs behind an orphaned historical prefix.
+                _process_after_id = 0
+                cur.execute(scan_sql, (0, limit))
+                ids = [row[0] for row in cur.fetchall()]
+            if ids:
+                _process_after_id = ids[-1]
     completed = 0
     for event_id in ids:
         try:
