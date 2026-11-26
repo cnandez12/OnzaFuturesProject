@@ -44,6 +44,8 @@ Las variables están descritas en `.env.example`. Las imprescindibles:
 - `TELEGRAM_BOT_TOKEN` y `DESTINATION_CHANNEL_ID`: bot administrador y canal principal.
 - `INITIAL_BALANCE`, `MARGIN_PER_TRADE`, `LEVERAGE`: iguales en el servicio web y en `worker.py process`.
 
+Los mensajes de Telegram se publican con la marca **Vorza Futures**. El pie «JOIN VORZA APP NOW» no lleva enlace hasta que se defina `TELEGRAM_APP_URL` en el servicio de Telegram.
+
 ## Ejecución
 
 ```bash
@@ -90,7 +92,7 @@ R es la distancia entre entrada y stop; TP1 está a 0,5 R. La lectura con BE sup
 
 | Situación | Qué hace el sistema |
 |---|---|
-| Sin conexión, 429, bot sin permiso (401/403) | Nada se publicó. Pausa el canal y repite sin límite. |
+| Sin conexión, 429, bot sin permiso (401/403) | Nada se publicó. En el canal principal, pausa el canal y repite sin límite. |
 | Error 5xx con rechazo explícito | Nada se publicó. Repite ese mensaje con espera creciente, hasta 6 intentos. |
 | Sin respuesta o respuesta ilegible | No se sabe si se publicó. Queda `unknown` y **no** se repite. |
 | Rechazo 400 | Queda `failed`. |
@@ -104,6 +106,17 @@ python telegram_review.py confirm --event 123 --message-id 4567  # el mensaje S�
 ```
 
 `--publication` hace lo mismo para el canal Free y los resúmenes. `GET /health/telegram` devuelve `attention` cuando hay algo que revisar.
+
+En el canal Free y los resúmenes el límite de 6 intentos (unos 30 minutos) vale para cualquier motivo, también sin conexión o sin permiso: una entrada Free publicada con horas de atraso se leería como nueva.
+
+Lo atascado que ya es demasiado viejo para publicarse se descarta sin enviarlo. No borra filas ni cambia la contabilidad:
+
+```bash
+python telegram_review.py discard --older-than-hours 24            # solo cuenta
+python telegram_review.py discard --older-than-hours 24 --execute  # descarta
+```
+
+Los resultados de una entrada descartada tampoco se publican, porque no tienen mensaje al que responder; un TP descartado no frena al siguiente.
 
 ## Sitio público
 

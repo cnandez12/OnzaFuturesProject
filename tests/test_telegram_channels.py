@@ -33,7 +33,7 @@ class ChannelTests(unittest.TestCase):
         text = tc.report_parts([closed()],date(2026,10,2),True)[0]
         self.assertIn("TP2 · +105.00%",text)
         self.assertIn("Sum of ROI per signal",text)
-        self.assertIn(tc.APP_URL,text)
+        self.assertTrue(text.endswith("📲 JOIN VORZA APP NOW"))
         self.assertNotIn("Ganadas",text)
 
     def test_empty_and_large_reports_fit_telegram(self):
@@ -41,7 +41,7 @@ class ChannelTests(unittest.TestCase):
         self.assertIn("Closed trades: 0",empty)
         parts = tc.report_parts([closed() for _ in range(500)],date(2026,10,2),True)
         self.assertGreater(len(parts),1)
-        self.assertTrue(all(len(p)<4096 and tc.APP_URL in p for p in parts))
+        self.assertTrue(all(len(p)<4096 and "JOIN VORZA APP NOW" in p for p in parts))
         self.assertEqual(sum(p.count("BTCUSDT · LONG") for p in parts),500)
 
     def test_momentum_requires_two_wins_positive_net_and_no_tie(self):
@@ -86,6 +86,30 @@ class ChannelTests(unittest.TestCase):
         cur.fetchone.return_value = {"value":"2026-10-01"}
         tc.plan_daily(cur,"main","free",datetime(2026,10,1,23,59,tzinfo=timezone.utc))
         self.assertFalse(any("sim_track_record" in c.args[0] for c in cur.execute.call_args_list))
+
+    def test_every_signal_and_report_text_carries_the_vorza_futures_name(self):
+        from telegram_delivery import telegram_text
+        entry=dict(symbol="APEUSD.P",direction="LONG",timeframe="1H",leverage=20,entry=0.16,signalId="id",
+                   takeProfits=[dict(price=0.1646,roi=57.5),dict(price=0.1738,roi=172.5),dict(price=0.1876,roi=345.0)],
+                   stopLoss=dict(price=0.1508),typeSignal="entry")
+        result=dict(entry,typeSignal="tp1",price=0.1646)
+        stop=dict(entry,typeSignal="sl",price=0.1508)
+        texts=[telegram_text(entry),telegram_text(stop),tc.free_text(entry),tc.free_text(result),tc.masked_entry(entry),
+               *tc.report_parts([closed()],date(2026,10,1)),*tc.report_parts([closed()],date(2026,10,1),True),
+               *tc.report_parts([closed()],date(2026,9,28),True,weekly=True)]
+        for text in texts:
+            self.assertIn("VORZA FUTURES",text.upper())
+            self.assertNotIn("ONZA",text.upper())
+            self.assertNotIn("http",text)
+
+    def test_footer_shows_the_app_link_only_when_it_is_configured(self):
+        with patch.dict("os.environ",{"TELEGRAM_APP_URL":""}):
+            self.assertEqual(tc.cta(tc.JOIN_EN),"📲 JOIN VORZA APP NOW")
+            self.assertEqual(tc.cta(tc.JOIN_ES,html=True),"📲 <b>ENTRA A VORZA APP YA MISMO</b>")
+        with patch.dict("os.environ",{"TELEGRAM_APP_URL":"https://example.com/app?a=1&b=2"}):
+            self.assertEqual(tc.cta(tc.JOIN_EN),"📲 JOIN VORZA APP NOW 👇🏻\nhttps://example.com/app?a=1&b=2")
+            self.assertTrue(tc.cta(tc.JOIN_EN,html=True).endswith("👇🏻\nhttps://example.com/app?a=1&amp;b=2"))
+            self.assertIn("https://example.com/app",tc.report_parts([closed()],date(2026,10,2),True)[0])
 
     def test_masked_entry_does_not_leak_parameters(self):
         p=dict(symbol="APEUSD.P",direction="LONG",timeframe="1H",leverage=20,entry=0.16,

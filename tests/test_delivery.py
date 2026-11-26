@@ -100,7 +100,7 @@ class DeliveryTests(unittest.TestCase):
             data = post.call_args.kwargs["data"]
             self.assertEqual(data["parse_mode"],"HTML")
             caption = data["caption"]
-            for text in (kind.upper()+" REACHED", "+172.50%", "+8625.00 USDT", "1 hour 33 minutes", "id6768534887"):
+            for text in (kind.upper()+" REACHED", "+172.50%", "+8625.00 USDT", "1 hour 33 minutes", "JOIN VORZA APP NOW"):
                 self.assertIn(text,caption)
             self.assertNotIn("Source:",caption)
             self.assertNotIn("Theoretical",caption)

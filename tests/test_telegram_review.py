@@ -118,6 +118,29 @@ class ReviewToolTests(unittest.TestCase):
         self.assertTrue(review.retry_publication(Cursor(rowcount=1), 3))
         self.assertFalse(review.confirm_publication(Cursor(rowcount=0), 3, 10))
 
+    def test_discard_marks_old_stuck_rows_as_skipped_in_both_queues(self):
+        cursor = Cursor(rowcount=4)
+        self.assertEqual(review.discard_stale(cursor, 24), (4, 4))
+        updates = [(sql, params) for sql, params in cursor.calls if sql.startswith("UPDATE")]
+        self.assertEqual(len(updates), 2)
+        for sql, params in updates:
+            self.assertIn("'skipped'", sql)
+            self.assertIn("interval '1 hour'", sql)
+            self.assertEqual(params[1:], (("pending", "sending", "failed", "unknown"), 24))
+        self.assertIn("state='applied'", updates[0][0])
+        self.assertFalse(any("DELETE" in sql for sql, _ in cursor.calls))
+
+    def test_discard_refuses_recent_rows_that_may_be_in_flight(self):
+        cursor = Cursor()
+        with self.assertRaises(ValueError):
+            review.discard_stale(cursor, 0)
+        self.assertEqual(cursor.calls, [])
+
+    def test_counting_before_discard_changes_nothing(self):
+        cursor = Cursor(rows=[{"status": "unknown", "total": 53}])
+        self.assertEqual(review.stale_counts(cursor, 24)["principal"], {"unknown": 53})
+        self.assertTrue(all(sql.startswith("SELECT") for sql, _ in cursor.calls))
+
     def test_tool_never_talks_to_telegram(self):
         from pathlib import Path
         source = Path(review.__file__).read_text(encoding="utf-8")

@@ -62,13 +62,13 @@ def telegram_text(payload: dict) -> str:
             f"🎯 TP{i}: {tp['price']} ({tp['roi']:+.2f}% ROI)"
             for i, tp in enumerate(payload["takeProfits"], 1)
         )
-        return (f"🔔 Nueva señal Onza Futures\n#{symbol} {direction} · {payload['timeframe']}\n"
+        return (f"🔔 Nueva señal Vorza Futures\n#{symbol} {direction} · {payload['timeframe']}\n"
                 f"⚡ Apalancamiento x{payload['leverage']}\n📍 Entrada: {payload['entry']}\n"
                 f"{targets}\n⛔ SL: {payload['stopLoss']['price']}\n"
                 f"ID: {payload['signalId']}")
     label = {"tp1": "✅ TP1", "tp2": "✅ TP2", "tp3": "🏆 TP3",
              "sl": "⛔ Stop Loss", "close": "🔄 Cierre por señal"}[event]
-    return (f"{label} · Onza Futures\n#{symbol} {direction} · {payload['timeframe']}\n"
+    return (f"{label} · Vorza Futures\n#{symbol} {direction} · {payload['timeframe']}\n"
             f"📍 Precio: {payload['price']}\nID: {payload['signalId']}")
 
 

@@ -125,7 +125,14 @@ def claim_delivery(channel: str):
                 audit('TELEGRAM EVENTO OMITIDO',event['payload'],event['id'],motivo=suppressed)
                 continue
             predecessors=[row for row in related if row['state']=='applied' and EVENT_ORDER[row['event_type']] < EVENT_ORDER[event['event_type']]]
-            if not all(row['telegram_status']=='delivered' for row in predecessors):
+            # Un anterior 'skipped' fue descartado en revisión manual: no se publicará nunca.
+            # Sin entrada publicada no hay mensaje al que responder; un TP descartado no frena al siguiente.
+            if any(row['event_type']=='entry' and row['telegram_status']=='skipped' for row in predecessors):
+                reason='Entrada descartada sin publicar: resultado sin mensaje al que responder'
+                cur.execute("UPDATE tv_events SET telegram_status='skipped',telegram_result=%s WHERE id=%s",(reason,event['id']))
+                audit('TELEGRAM EVENTO OMITIDO',event['payload'],event['id'],motivo=reason)
+                continue
+            if not all(row['telegram_status'] in ('delivered','skipped') for row in predecessors):
                 audit_wait('TELEGRAM EN ESPERA',event['payload'],event['id'],motivo='Publicacion anterior de esta señal pendiente o sin confirmar')
                 continue
             cur.execute("""UPDATE tv_events SET telegram_status='sending',

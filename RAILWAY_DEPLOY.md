@@ -10,7 +10,7 @@ Una base PostgreSQL exclusiva y cuatro servicios desde la misma carpeta raíz, c
 |---|---|---|---|
 | `onza-web` | `python setup_db.py && gunicorn app:app --bind 0.0.0.0:${PORT:-5000}` | `DATABASE_URL`, `TRADINGVIEW_API_KEY`, `DASHBOARD_TOKEN`, `INITIAL_BALANCE`, `MARGIN_PER_TRADE`, `LEVERAGE`, `PUBLIC_WEBSITE_HOSTS`, `VORZA_ENABLED` | Sí |
 | `onza-process` | `python worker.py process` | `DATABASE_URL`, `INITIAL_BALANCE`, `MARGIN_PER_TRADE` | No |
-| `onza-telegram` | `python worker.py telegram` | `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, `DESTINATION_CHANNEL_ID`, opcional `FREE_CHANNEL_ID`, `ONZA_FREE_BLACKLIST` | No |
+| `onza-telegram` | `python worker.py telegram` | `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, `DESTINATION_CHANNEL_ID`, opcional `FREE_CHANNEL_ID`, `TELEGRAM_APP_URL`, `ONZA_FREE_BLACKLIST` | No |
 | `onza-vorza` | `python vorza_worker.py` | `DATABASE_URL` y las `VORZA_*` | No |
 
 - `DATABASE_URL` como referencia al servicio de base, por ejemplo `${{Postgres.DATABASE_URL}}`.

@@ -16,10 +16,16 @@ from audit_log import audit, audit_wait
 from telegram_http import FAILED, MAX_ATTEMPTS, RETRY, explicit_rejection, never_sent
 
 COLOMBIA = timezone(timedelta(hours=-5))
-APP_URL = "https://apps.apple.com/app/id6768534887"
 DEFAULT_FREE_CHANNEL = "-1004466702211"
-CTA_EN = "📲 JOIN ONZA APP NOW 👇🏻\n" + APP_URL
-CTA_ES = "📲 ENTRA A ONZA APP YA MISMO 👇🏻\n" + APP_URL
+JOIN_EN = "JOIN VORZA APP NOW"
+JOIN_ES = "ENTRA A VORZA APP YA MISMO"
+
+
+def cta(text, html=False):
+    """Pie de los mensajes. El enlace solo aparece si TELEGRAM_APP_URL está configurada."""
+    url = os.getenv("TELEGRAM_APP_URL", "").strip()
+    line = f"📲 <b>{text}</b>" if html else f"📲 {text}"
+    return f"{line} 👇🏻\n{escape(url) if html else url}" if url else line
 
 
 def roi(entry, price, direction, leverage=20):
@@ -46,13 +52,14 @@ def report_parts(rows, day, english=False, weekly=False):
         direction_icon = "🟢" if row["direction"] == "LONG" else "🔴"
         result_icon = "🏆" if label == "TP3" else "✅" if label.startswith("TP") else "🛑" if label == "SL" else "🔄"
         lines.append(f"{direction_icon} {row['symbol']} · {row['direction']}\n{result_icon} {label} · {value:+.2f}%\n")
-    heading = ("📊 ONZA FUTURES · DAILY RESULTS" if english else "📊 ONZA FUTURES · CIERRE DEL DÍA") + f"\n📅 {day} · UTC\n"
+    heading = ("📊 VORZA FUTURES · DAILY RESULTS" if english else "📊 VORZA FUTURES · CIERRE DEL DÍA") + f"\n📅 {day} · UTC\n"
     if weekly:
-        heading = f"📊 ONZA FUTURES · WEEKLY RESULTS\n📅 {day} – {day + timedelta(days=6)} · UTC\n"
+        heading = f"📊 VORZA FUTURES · WEEKLY RESULTS\n📅 {day} – {day + timedelta(days=6)} · UTC\n"
+    footer = cta(JOIN_EN if english else JOIN_ES)
     chunks, current = [], heading
     for line in lines:
         if len(current) + len(line) > 3000:
-            chunks.append(current + "\n\n" + (CTA_EN if english else CTA_ES))
+            chunks.append(current + "\n\n" + footer)
             current = heading
         current += "\n" + line
     reached = sum(label.startswith("TP") for label in labels)
@@ -64,14 +71,14 @@ def report_parts(rows, day, english=False, weekly=False):
         summary = (f"\n━━━━━━━━━━━━━━━━━━\n📋 Closed trades: {len(rows)}\n✅ Reached a TP: {reached}"
                    f"\n❌ SL without TP: {stops}"
                    + (f"\n🔄 Other closes: {others}" if others else "")
-                   + f"\n🎯 Highest-TP win rate: {rate:.2f}%\n📊 Sum of ROI per signal: {total:+.2f}%\n\n" + CTA_EN)
+                   + f"\n🎯 Highest-TP win rate: {rate:.2f}%\n📊 Sum of ROI per signal: {total:+.2f}%\n\n" + footer)
     else:
         summary = (f"\n━━━━━━━━━━━━━━━━━━\n📋 Operaciones cerradas: {len(rows)}\n✅ Con TP alcanzado: {reached}"
                    f"\n❌ SL sin TP: {stops}"
                    + (f"\n🔄 Otros cierres: {others}" if others else "")
-                   + f"\n🎯 Efectividad por máximo TP: {rate:.2f}%\n📊 Suma de ROI por señal: {total:+.2f}%\n\n" + CTA_ES)
+                   + f"\n🎯 Efectividad por máximo TP: {rate:.2f}%\n📊 Suma de ROI por señal: {total:+.2f}%\n\n" + footer)
     if len(current + summary) > 3900:
-        chunks.append(current + "\n\n" + (CTA_EN if english else CTA_ES))
+        chunks.append(current + "\n\n" + footer)
         current = heading
     chunks.append(current + summary)
     return chunks
@@ -88,34 +95,34 @@ def duration_text(opened_at, event_time):
 
 def free_text(payload, opened_at=None, event_time=None, margin_used=None):
     kind = payload["typeSignal"]
-    header = f"⚡ ONZA FUTURES\n🪙 {payload['symbol']} · {payload['direction']} · {payload['timeframe']}"
+    header = f"⚡ VORZA FUTURES\n🪙 {payload['symbol']} · {payload['direction']} · {payload['timeframe']}"
     if kind == "entry":
         targets = "\n".join(f"🎯 TP{i}: {t['price']} · {roi(payload['entry'], t['price'], payload['direction'], payload['leverage']):+.2f}%"
                             for i, t in enumerate(payload["takeProfits"], 1))
         return (f"🎁 FREE SIGNAL · FULL ACCESS\n{header}\n⚙️ Leverage: {payload['leverage']}x"
                 f"\nEntry price: {payload['entry']}\n{targets}\n🛑 Stop Loss: {payload['stopLoss']['price']}"
-                "\n\nOne of our free weekly signals. Full levels included. Follow the updates below.\n\n" + CTA_EN)
+                "\n\nOne of our free weekly signals. Full levels included. Follow the updates below.\n\n" + cta(JOIN_EN))
     label = {"tp1": "✅ TP1 REACHED", "tp2": "✅ TP2 REACHED", "tp3": "🏆 TP3 REACHED",
              "sl": "🛑 STOP LOSS REACHED", "close": "🔄 TRADE CLOSED"}[kind]
     value = roi(payload["entry"], payload["price"], payload["direction"], payload["leverage"])
     identity = escape(f"{payload['symbol']} · {payload['direction']} · {payload['timeframe']}")
-    body = (f"<b>{label}</b>\n⚡ <b>ONZA FUTURES</b>\n━━━━━━━━━━━━━━━━━━\n\n"
+    body = (f"<b>{label}</b>\n⚡ <b>VORZA FUTURES</b>\n━━━━━━━━━━━━━━━━━━\n\n"
             f"🪙 <b>{identity}</b>\n📍 <b>Entry price:</b> {escape(str(payload['entry']))}"
             f"\n🎯 <b>Last price:</b> {escape(str(payload['price']))}\n📊 <b>ROI:</b> {value:+.2f}%")
     if margin_used is not None:
         body += f"\n💵 <b>P&amp;L:</b> {Decimal(str(margin_used)) * value / 100:+.2f} USDT"
     if opened_at and event_time:
         body += f"\n⏱️ <b>Duration:</b> {duration_text(opened_at,event_time)}"
-    return body + "\n\n📲 <b>JOIN ONZA APP NOW</b> 👇🏻\n" + APP_URL
+    return body + "\n\n" + cta(JOIN_EN, html=True)
 
 
 def masked_entry(payload):
-    return ("🔔 <b>NEW SIGNAL · ONZA FUTURES</b>\n━━━━━━━━━━━━━━━━━━\n\n"
+    return ("🔔 <b>NEW SIGNAL · VORZA FUTURES</b>\n━━━━━━━━━━━━━━━━━━\n\n"
             f"🪙 <b>{escape(payload['symbol'])} · {escape(payload['timeframe'])}</b>\n"
             f"⚡ <b>Leverage: {payload['leverage']}x</b>\n"
             "🔒 <b>Direction: HIDDEN</b>\n📍 <b>Entry:</b> 🔒\n"
             "🎯 <b>TP1:</b> 🔒\n🎯 <b>TP2:</b> 🔒\n🎯 <b>TP3:</b> 🔒\n⛔ <b>SL:</b> 🔒\n\n"
-            "🚀 <b>Unlock the full signal in Onza App</b>\n\n📲 <b>JOIN ONZA APP NOW</b> 👇🏻\n" + APP_URL)
+            "🚀 <b>Unlock the full signal in Vorza App</b>\n\n" + cta(JOIN_EN, html=True))
 
 
 def momentum(rows):
@@ -174,7 +181,8 @@ def plan_free(cur, channel):
             else:
                 enqueue(cur, parent_key, channel, "sendMessage", {"text": masked_entry(p), "parse_mode": "HTML"})
         else:
-            cur.execute("SELECT 1 FROM telegram_publications WHERE job_key=%s", (parent_key,))
+            # Una entrada Free descartada en revisión manual no tendrá resultados colgando de ella.
+            cur.execute("SELECT 1 FROM telegram_publications WHERE job_key=%s AND status<>'skipped'", (parent_key,))
             if cur.fetchone():
                 enqueue(cur, f"free:{channel}:{p['signalId']}:{kind}", channel, "copyMessage",
                         {"from_chat_id": event["telegram_chat_id"], "message_id": event["telegram_message_id"],
@@ -285,14 +293,15 @@ def deliver(conn):
     status,msg,detail = call_telegram(job["method"],body)
     with conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # Nada publicado: repetir con espera creciente (60 s, 2 min... hasta 1 h).
-            # Solo los 5xx ('retry') tienen límite de intentos; después quedan 'failed'.
+            # Nada publicado: repetir con espera creciente (1, 2, 4, 8 y 16 min) y después 'failed'.
+            # El límite vale para todo motivo: una entrada Free o un resumen publicados con
+            # horas de atraso se leerían como nuevos.
             waiting = status in ("pending","retry")
             cur.execute("""UPDATE telegram_publications SET message_id=%s,detail=%s,
                 status=CASE WHEN %s AND attempts+1 >= %s THEN 'failed' WHEN %s THEN 'pending' ELSE %s END,
                 available_at=now()+LEAST(3600,60*power(2,CASE WHEN %s THEN LEAST(attempts,10) ELSE 0 END))*interval '1 second',
                 attempts=attempts+%s WHERE id=%s""",
-                (msg,detail,status == "retry",MAX_ATTEMPTS,waiting,status,waiting,int(waiting),job["id"]))
+                (msg,detail,waiting,MAX_ATTEMPTS,waiting,status,waiting,int(waiting),job["id"]))
             if waiting:
                 status = "pending"
             if status == "delivered" and job["pin_after"]:

@@ -110,6 +110,37 @@ class WorkerPriorityTests(unittest.TestCase):
              patch.object(worker, "connect", return_value=Connection(cursor)):
             self.assertIsNone(worker.claim_delivery("telegram"))
 
+    def claim_with_history(self, kind, history):
+        event = {"id": 9, "signal_id": "s", "event_type": kind, "payload": {}, "telegram_status": "pending"}
+        cursor = Cursor(event)
+        cursor.fetchall = lambda: [event] if "FOR UPDATE SKIP LOCKED" in cursor.current else history
+        with patch.dict(os.environ, TELEGRAM_ENV), \
+             patch.object(worker, "connect", return_value=Connection(cursor)):
+            return worker.claim_delivery("telegram"), cursor
+
+    def test_result_of_a_discarded_entry_is_skipped_instead_of_waiting_forever(self):
+        claimed, cursor = self.claim_with_history("tp1", [
+            {"event_type": "entry", "state": "applied", "telegram_status": "skipped"}])
+        self.assertIsNone(claimed)
+        skip = next(i for i, sql in enumerate(cursor.sql) if "telegram_status='skipped'" in sql)
+        self.assertEqual(cursor.params[skip][1], 9)
+        self.assertIn("Entrada descartada", cursor.params[skip][0])
+        self.assertFalse(any("telegram_status='sending'" in sql for sql in cursor.sql))
+
+    def test_discarded_target_does_not_block_the_next_one(self):
+        claimed, _cursor = self.claim_with_history("tp2", [
+            {"event_type": "entry", "state": "applied", "telegram_status": "delivered"},
+            {"event_type": "tp1", "state": "applied", "telegram_status": "skipped"}])
+        self.assertEqual(claimed[0], 9)
+
+    def test_unconfirmed_predecessor_still_blocks(self):
+        for status in ("pending", "sending", "unknown", "failed"):
+            with self.subTest(status=status):
+                claimed, _cursor = self.claim_with_history("tp2", [
+                    {"event_type": "entry", "state": "applied", "telegram_status": "delivered"},
+                    {"event_type": "tp1", "state": "applied", "telegram_status": status}])
+                self.assertIsNone(claimed)
+
     def test_claim_takes_only_pending_events_whose_wait_has_ended(self):
         for kind in ("entry", "tp1", "tp2", "tp3", "sl"):
             with self.subTest(kind=kind):

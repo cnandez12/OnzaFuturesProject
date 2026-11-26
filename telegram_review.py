@@ -13,6 +13,14 @@ casos que el sistema no puede decidir: 'unknown' (sin confirmación), 'sending'
 Antes de decidir, mirar el canal: si el mensaje NO está, usar retry (el worker
 lo publicará); si SÍ está, usar confirm con su número de mensaje. Un retry de
 un mensaje que sí se publicó lo duplica.
+
+Para lo que ya es demasiado viejo para publicarse:
+
+  python telegram_review.py discard --older-than-hours 24            # solo cuenta
+  python telegram_review.py discard --older-than-hours 24 --execute  # descarta
+
+discard marca como 'skipped' todo lo atascado o en espera con esa antigüedad.
+No se publica nunca y no borra filas ni toca la contabilidad.
 """
 
 from __future__ import annotations
@@ -94,10 +102,43 @@ def confirm_publication(cur, publication_id: int, message_id: int) -> bool:
     return cur.rowcount == 1
 
 
+STALE = ("pending", "sending", "failed", "unknown")
+DISCARDED = "Descartado por revision manual; no se publica"
+EVENTS_STALE = """state='applied' AND telegram_status IN %s
+    AND received_at < now() - %s * interval '1 hour'"""
+PUBLICATIONS_STALE = "status IN %s AND available_at < now() - %s * interval '1 hour'"
+
+
+def stale_counts(cur, hours: int) -> dict:
+    """Cuánto se descartaría, por cola y estado. Solo lectura."""
+    cur.execute(f"SELECT telegram_status AS status, count(*) AS total FROM tv_events WHERE {EVENTS_STALE} GROUP BY 1",
+                (STALE, hours))
+    main_queue = {row["status"]: row["total"] for row in cur.fetchall()}
+    cur.execute(f"SELECT status, count(*) AS total FROM telegram_publications WHERE {PUBLICATIONS_STALE} GROUP BY 1",
+                (STALE, hours))
+    return {"principal": main_queue, "distribucion": {row["status"]: row["total"] for row in cur.fetchall()}}
+
+
+def discard_stale(cur, hours: int) -> tuple[int, int]:
+    """Marca como 'skipped' lo atascado o en espera más viejo que `hours`. No envía nada."""
+    if hours < 1:
+        raise ValueError("La antiguedad minima es 1 hora: lo reciente puede estar en pleno envio")
+    cur.execute("SET LOCAL lock_timeout = '5s'")
+    cur.execute(f"""UPDATE tv_events SET telegram_status='skipped', telegram_next_attempt_at=NULL,
+        telegram_result=%s WHERE {EVENTS_STALE}""", (DISCARDED, STALE, hours))
+    events = cur.rowcount
+    cur.execute(f"UPDATE telegram_publications SET status='skipped', detail=%s WHERE {PUBLICATIONS_STALE}",
+                (DISCARDED, STALE, hours))
+    return events, cur.rowcount
+
+
 def main():
     parser = argparse.ArgumentParser(description="Revisar publicaciones de Telegram atascadas; no envia mensajes")
     actions = parser.add_subparsers(dest="action", required=True)
     actions.add_parser("list", help="Mostrar lo que requiere revision")
+    old = actions.add_parser("discard", help="Descartar sin publicar lo atascado que ya es antiguo")
+    old.add_argument("--older-than-hours", type=int, required=True)
+    old.add_argument("--execute", action="store_true", help="Sin esta opcion solo se muestran los conteos")
     for name, text in (("retry", "El mensaje NO esta en el canal: volver a encolarlo"),
                        ("confirm", "El mensaje SI esta en el canal: registrar su numero")):
         sub = actions.add_parser(name, help=text)
@@ -115,6 +156,17 @@ def main():
             if args.action == "list":
                 lines = listing(cur)
                 print("\n".join(lines) if lines else "Nada requiere revision")
+                return
+            if args.action == "discard":
+                if args.older_than_hours < 1:
+                    parser.exit(2, "--older-than-hours debe ser 1 o mas\n")
+                print("Atascado con mas de", args.older_than_hours, "h:", stale_counts(cur, args.older_than_hours))
+                if not args.execute:
+                    print("Nada cambiado. Repetir con --execute para descartar.")
+                    return
+                events, publications = discard_stale(cur, args.older_than_hours)
+                print(f"Descartados sin publicar: {events} eventos del canal principal y "
+                      f"{publications} publicaciones de Free/resumenes")
                 return
             if args.action == "confirm" and args.message_id <= 0:
                 parser.exit(2, "message-id debe ser positivo\n")
