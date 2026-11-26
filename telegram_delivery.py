@@ -16,6 +16,7 @@ from bitunix_card import render_event_image as render_bitunix_event_image
 from audit_log import audit
 from telegram_channels import free_text
 from telegram_http import NETWORK_PAUSE_SECONDS, PAUSE, RETRY, explicit_rejection, never_sent
+from telegram_diagnostics import transport_details
 
 
 class TelegramDelivery(NamedTuple):
@@ -114,6 +115,7 @@ def post_telegram(payload: dict, trade: dict | None, *,
                 files={"photo": ("onza-event.jpg", picture, "image/jpeg")}, timeout=15,
             )
     except requests.RequestException as exc:
+        audit("TELEGRAM TRANSPORTE ERROR", payload, event_id, **transport_details(exc))
         if never_sent(exc):
             # La petición no salió: repetir es seguro y no puede duplicar el mensaje.
             return TelegramDelivery("pending", "Sin conexion con Telegram; no se envio",
