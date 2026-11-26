@@ -3,11 +3,18 @@ from unittest.mock import patch
 
 import app as receiver
 
+PANEL_HOST = 'https://onzafuturesproject-production.up.railway.app'
+PANEL = ('onza', 'clave-panel')
+
 
 class PublicWebsiteTests(unittest.TestCase):
     def setUp(self):
         self.client = receiver.app.test_client()
         self.origin = 'https://trade-onzafutures.up.railway.app'
+        token = patch.dict('os.environ', {'DASHBOARD_TOKEN': PANEL[1]})
+        token.start()
+        self.addCleanup(token.stop)
+        receiver.response_cache.clear()
 
     def get(self, path, **kwargs):
         response = self.client.get(path, **kwargs)
@@ -36,14 +43,30 @@ class PublicWebsiteTests(unittest.TestCase):
         with patch.object(receiver, 'database_connection') as db:
             for path in ('/api/audit/results', '/api/sim/open', '/health/onza', '/api/public/unknown'):
                 self.assertEqual(self.get(path, base_url=self.origin).status_code, 404)
+            # Ni siquiera con la contraseña correcta: el host público no expone el panel.
+            self.assertEqual(self.get('/api/sim/open', base_url=self.origin, auth=PANEL).status_code, 404)
             self.assertEqual(self.client.post('/webhook/tradingview', base_url=self.origin, json={}).status_code, 404)
             db.assert_not_called()
 
-    def test_original_host_keeps_existing_routes(self):
-        with receiver.app.test_request_context('/', base_url='https://onzafuturesproject-production.up.railway.app'):
+    def test_panel_host_asks_for_the_password_and_keeps_the_webhook_open(self):
+        for path in ('/', '/api/sim/open', '/api/audit/results', '/api/bitunix/tickers?symbols=BTCUSDT',
+                     '/static/js/audit.js'):
+            response = self.get(path, base_url=PANEL_HOST)
+            self.assertEqual(response.status_code, 401, path)
+            self.assertIn('Basic', response.headers['WWW-Authenticate'])
+        self.assertEqual(self.get('/', base_url=PANEL_HOST, auth=('onza', 'otra')).status_code, 401)
+        self.assertEqual(self.get('/', base_url=PANEL_HOST, auth=PANEL).status_code, 200)
+        self.assertEqual(self.get('/', base_url=PANEL_HOST,
+                                  headers={'Authorization': 'Bearer clave-panel'}).status_code, 200)
+        with receiver.app.test_request_context('/webhook/tradingview', method='POST', base_url=PANEL_HOST):
             self.assertIsNone(receiver.app.preprocess_request())
-        with receiver.app.test_request_context('/webhook/tradingview', method='POST', base_url='https://onzafuturesproject-production.up.railway.app'):
+        with receiver.app.test_request_context('/health', base_url=PANEL_HOST):
             self.assertIsNone(receiver.app.preprocess_request())
+
+    def test_panel_stays_locked_when_no_password_is_configured(self):
+        with patch.dict('os.environ', {'DASHBOARD_TOKEN': ''}):
+            for auth in (None, ('onza', ''), PANEL):
+                self.assertEqual(self.get('/api/sim/open', base_url=PANEL_HOST, auth=auth).status_code, 503)
 
     def test_public_api_remains_read_only_and_available(self):
         with patch('public_results.load_public', return_value={'signals': []}) as load:
@@ -52,12 +75,15 @@ class PublicWebsiteTests(unittest.TestCase):
             self.assertEqual(response.json, {'signals': []})
             self.assertEqual(self.client.post('/api/public/results', base_url=self.origin).status_code, 405)
             self.assertEqual(load.call_count, 1)
+            # El sitio publicado consulta esta API también desde el host del panel, sin contraseña.
+            self.assertEqual(self.get('/api/public/results', base_url=PANEL_HOST).status_code, 200)
+            self.assertEqual(load.call_count, 1)
 
     def test_extra_host_can_be_configured_without_catching_other_hosts(self):
         with patch.dict('os.environ', {'PUBLIC_WEBSITE_HOSTS': 'trade-onzafutures.up.railway.app, trade.onzafutures.com'}):
             self.assertEqual(self.get('/', base_url='https://trade.onzafutures.com').status_code, 200)
-            with receiver.app.test_request_context('/', base_url='https://trade.onzafutures.com.attacker.example'):
-                self.assertIsNone(receiver.app.preprocess_request())
+            # Un host parecido no es el sitio público: cae en el panel y pide contraseña.
+            self.assertEqual(self.get('/', base_url='https://trade.onzafutures.com.attacker.example').status_code, 401)
 
 
 if __name__ == '__main__':

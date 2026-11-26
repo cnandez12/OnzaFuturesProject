@@ -6,8 +6,6 @@ import os
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
-from psycopg2.extras import RealDictCursor
-
 from onza_contract import InvalidSignal, internal_pair, number
 
 
@@ -178,12 +176,6 @@ def _event(cur, payload: dict, received_at: datetime | None = None) -> None:
          balance_before, balance_after, used_margin, trade["leverage"],
          _duration(trade["date"], now), trade["date"], now),
     )
-    for table in ("daily_profits", "weekly_profits", "monthly_profits"):
-        cur.execute(
-            f"""INSERT INTO {table} (key,value,gain_date,Close) VALUES (%s,%s,%s,TRUE)
-                ON CONFLICT (key) DO NOTHING""",
-            (payload["signalId"], f"{trade['pair']} {trade['side']} {total_pct:+.2f}%", now),
-        )
 
 
 def apply_event(cur, payload: dict, received_at: datetime | None = None) -> None:

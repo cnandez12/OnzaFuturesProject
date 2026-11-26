@@ -16,8 +16,8 @@ ROOT = Path(__file__).resolve().parent
 ASSETS = ROOT / "assets" / "bitunix"
 BACKGROUNDS = ASSETS / "clean"
 CARD_TEMPLATES = ASSETS / "card_templates"
-LOGO = ROOT / "backend" / "assets" / "bitunix" / "bitunix-logo.png"
-FONTS = ROOT / "backend"
+LOGO = ASSETS / "bitunix-logo.png"
+FONTS = ROOT / "assets" / "fonts"
 DESIGN_COUNT = 25
 CANVAS = (1035, 1005)
 

@@ -1,4 +1,4 @@
-"""Telegram presentation policy; raw events and Onza delivery stay unchanged."""
+"""Reglas de presentación en Telegram; los eventos guardados y la contabilidad no cambian."""
 
 def closing_suppression(kind, related):
     if kind not in ("sl", "close"):

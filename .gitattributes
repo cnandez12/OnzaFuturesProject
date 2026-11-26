@@ -1,0 +1,7 @@
+# Finales de línea coherentes entre Windows y el contenedor Linux.
+* text=auto
+*.sh text eol=lf
+Procfile text eol=lf
+*.jpg binary
+*.png binary
+*.ttf binary

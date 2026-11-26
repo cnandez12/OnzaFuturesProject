@@ -1,12 +1,33 @@
-# Onza · public product experience
+# Sitio público de Onza Futures
 
-Production assets live in `dist/`; `.openai/hosting.json` retains the existing public Site. The read-only API remains on Railway. The provided logo is unchanged. Motion 14.3.0 animates the composition and Three.js 0.186.1 renders the surrounding silver sculpture. Their MIT notices are packaged in `dist/vendor`. With WebGL unavailable the CSS orbital visual remains; reduced-motion preferences disable movement. No external template, testimonial, or invented product screenshot is used. The phone visual is labelled as a view of the actual public results ledger.
+Página de producto con los resultados del registro. La sirve `public_website.py` desde esta carpeta, solo en los hostnames de `PUBLIC_WEBSITE_HOSTS` (por defecto `trade-onzafutures.up.railway.app`), junto con las tres rutas de solo lectura `/api/public/*`. En esos hostnames el panel interno y el receptor responden 404. Es enrutamiento por hostname: la protección del panel es su contraseña (`dashboard_auth.py`).
 
-Build: `pnpm install --ignore-scripts`, then `node build.cjs`. Verify: `node chart-tests.cjs`. Repository references: https://github.com/motiondivision/motion and https://github.com/mrdoob/three.js . React Bits (https://github.com/DavidHDev/react-bits) was evaluated but is not included.
+## Archivos
 
-`public_results.py` emits levels for all closed history and up to four active highlights selected by highest reached TP and then calculated open ROI. Untargeted active candidates require a positive result from a fresh market quote; remaining slots use recent positive closed history, labelled as closed. All other active prices, leg details, quantities and financial amounts are excluded from the response, with `prices_visible=false`. Internal records and reports remain untouched. Open performance combines realized partials and the marked remainder; public quotes use a 10-second cache and missing quotes never qualify an untargeted signal as positive. Selection refreshes every 30 seconds and is explicitly described as a partial showcase. The UI fails closed for active rows missing that visibility flag, excludes protected trades from chart overlays, and shows market candles without the protected active markers. Selecting a protected record also suppresses other active overlays on the same symbol. Results and totals retain the complete ledger.
+- **Servidos al visitante:** `index.html`, `app.js`, `chart-adapter.js`, `fb-chart.js`, `experience.js`, `premium.js`, las hojas `.css`, `onza-logo.png` y `vendor/`. La lista exacta está en `PUBLIC_FILES` de `public_website.py`; cualquier otro archivo responde 404.
+- **`premium.js`:** paquete generado desde `source/premium-entry.js` con Motion 14.3.0 y Three.js 0.186.1. Sus licencias MIT están en `vendor/`.
+- **`fb-chart.js` y `chart-adapter.js`:** el motor de gráficos del panel y su adaptador para el sitio.
+- **`chart-tests.cjs`, `featured-ui-tests.cjs`, `source/`:** pruebas y herramientas de construcción; no se sirven.
 
-The original dashboard chart engine remains in `dist/fb-chart.js`. The public adapter centers the selected operation in logical time, reserves horizontal room for target labels and expands auto-scaling to contain entry, original stop and all targets. Historical selections request candles around their closure. The re-center button restores the initial framing after manual navigation. Rapid selections discard stale queued requests. None of these changes alter Telegram, webhooks, dispatchers, execution, or the internal chart module.
-In this GitHub mirror, production assets are at the public-site root; build tooling is in source/. Run pnpm install --ignore-scripts and node build.cjs there. Run node featured-ui-tests.cjs from public-site to verify closed fallback labels, live counts, open performance and masked revocations.
+`app.js` y `fb-chart.js` consultan la API por la URL absoluta del servicio web (`/api/public`), por lo que esas tres rutas quedan abiertas, sin contraseña, también en el hostname del panel.
 
-Railway public hostname: `trade-onzafutures.up.railway.app`. Both Railway hostnames currently share the existing web service. `public_website.py` serves only the public asset allowlist and the three read-only public endpoints on that hostname; other hosts retain their original routes. The default can be extended through `PUBLIC_WEBSITE_HOSTS` (comma-separated exact hostnames). This is hostname routing, not authentication for the original dashboard. No worker or webhook startup is duplicated. The site consumes the existing read-only public API. Index HTML is revalidated on each visit.
+## Qué se publica
+
+`public_results.py` entrega:
+
+- Todo el historial cerrado, con niveles y resultado.
+- Hasta cuatro señales activas destacadas con sus niveles: primero las que alcanzaron TP2, luego TP1, luego las que tienen rendimiento abierto positivo según una cotización reciente. Si faltan, se completa con cierres positivos recientes, rotulados como cerrados.
+- Del resto de las activas: símbolo, dirección, temporalidad, hora y máximo TP. Sin precios, tramos ni importes (`prices_visible=false`).
+
+Los totales y la curva usan el registro completo, con la regla de BE tras TP1. El rendimiento abierto suma los parciales realizados y el resto valorado a precio de mercado; las cotizaciones se guardan 10 segundos y el resultado completo 15. La selección de destacadas se describe en la propia página como una muestra parcial.
+
+Si una fila activa llega sin la marca de visibilidad, la interfaz la trata como reservada y no dibuja sus niveles en el gráfico.
+
+## Construcción y pruebas
+
+```bash
+cd source && pnpm install --ignore-scripts && node build.cjs
+cd .. && node chart-tests.cjs && node featured-ui-tests.cjs
+```
+
+No se usa ninguna plantilla externa, testimonio ni captura inventada. Sin WebGL queda la versión CSS del elemento visual; con `prefers-reduced-motion` no hay animación.

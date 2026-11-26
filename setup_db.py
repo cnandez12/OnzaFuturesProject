@@ -5,7 +5,6 @@ from pathlib import Path
 
 import psycopg2
 from dotenv import load_dotenv
-from retire_legacy_delivery import retire
 from vorza_queue import SCHEMA as VORZA_SCHEMA, configure as configure_vorza
 from vorza_delivery import enabled as vorza_enabled
 
@@ -28,7 +27,6 @@ def main():
                 if cur.fetchone() is None:
                     raise SystemExit("La base pertenece a otro proyecto")
             cur.execute(schema)
-            retire(cur)
             cur.execute(VORZA_SCHEMA)
             configure_vorza(cur, vorza_enabled())
     print("Esquema Onza listo")

@@ -2,12 +2,11 @@ import os
 import time
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from psycopg2.pool import SimpleConnectionPool
+from psycopg2.pool import ThreadedConnectionPool
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 from datetime import datetime, date
-import json
 from dashboard.max_tp import project_sql
 
 load_dotenv()
@@ -38,7 +37,8 @@ def init_db_pool(attempts=10, delay=2):
         return
     for attempt in range(1, attempts + 1):
         try:
-            db_pool = SimpleConnectionPool(1, 5, dsn=DATABASE_URL)
+            # gunicorn atiende con hilos (gunicorn.conf.py): el pool debe ser seguro entre hilos.
+            db_pool = ThreadedConnectionPool(1, 10, dsn=DATABASE_URL)
             conn = db_pool.getconn()
             with conn.cursor() as cur:
                 cur.execute("SELECT 1")
@@ -114,17 +114,8 @@ def query(sql, params=(), fetch_all=False, fetch_one=False):
             _reset_pool()
 
 
-# ── JSON encoder para Decimal y datetime ─────────────────────────────────────
+# ── JSON para Decimal y datetime ─────────────────────────────────────────────
 
-class CustomEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if hasattr(obj, '__float__'):
-            return float(obj)
-        if isinstance(obj, (datetime, date)):
-            return obj.isoformat()
-        return super().default(obj)
-
-# Flask 2.3+ compatible JSON config (replaces deprecated app.json_encoder)
 from flask.json.provider import DefaultJSONProvider
 class CustomJSONProvider(DefaultJSONProvider):
     def default(self, obj):
@@ -164,14 +155,6 @@ def rows_to_list(rows):
     return result
 
 
-# ── Dashboard público ────────────────────────────────────────────────────────
-
-def check_auth():
-    # Dashboard de auditoría público por decisión expresa del propietario.
-    # El receptor de TradingView valida su propia TRADINGVIEW_API_KEY.
-    return True
-
-
 # ── Rutas HTML ────────────────────────────────────────────────────────────────
 
 @app.route("/")
@@ -189,11 +172,8 @@ def index():
 
 @app.route("/api/sim/history")
 def api_history():
-    if not check_auth():
-        return jsonify({"error": "Unauthorized"}), 401
-
-    limit  = min(int(request.args.get("limit",  500)), 1000)
-    offset = max(int(request.args.get("offset", 0)), 0)
+    limit  = max(1, min(request.args.get("limit", 500, type=int), 1000))
+    offset = max(request.args.get("offset", 0, type=int), 0)
 
     rows = query(
         """
@@ -226,9 +206,6 @@ def api_history():
 
 @app.route("/api/sim/stats")
 def api_stats():
-    if not check_auth():
-        return jsonify({"error": "Unauthorized"}), 401
-
     row = query(
         """
         SELECT
@@ -269,8 +246,6 @@ def api_stats():
 def api_pulse():
     """Endpoint ultraligero — solo devuelve el conteo de trades y el último cierre.
     El dashboard lo consulta cada 10s para detectar trades nuevos sin cargar toda la DB."""
-    if not check_auth():
-        return jsonify({"error": "Unauthorized"}), 401
     row = query(
         """SELECT
                   (SELECT COUNT(*) FROM sim_track_record) AS total,
@@ -295,9 +270,6 @@ def api_pulse():
 
 @app.route("/api/sim/open")
 def api_open():
-    if not check_auth():
-        return jsonify({"error": "Unauthorized"}), 401
-
     rows = query(
         """
         SELECT message_id AS id, pair, side AS direction, source_exchange,
@@ -323,9 +295,6 @@ def api_open():
 
 @app.route("/api/sim/curve")
 def api_curve():
-    if not check_auth():
-        return jsonify({"error": "Unauthorized"}), 401
-
     rows = query(
         """
         SELECT
@@ -352,9 +321,6 @@ def api_curve():
 
 @app.route("/api/sim/symbols")
 def api_symbols():
-    if not check_auth():
-        return jsonify({"error": "Unauthorized"}), 401
-
     rows = query(
         """
         SELECT symbol,
@@ -379,9 +345,6 @@ def api_symbols():
 
 @app.route("/api/chart/symbol_stats")
 def api_chart_symbol_stats():
-    if not check_auth():
-        return jsonify({"error": "Unauthorized"}), 401
-
     symbol = request.args.get("symbol", "")
     if not symbol:
         return jsonify({"error": "symbol required"}), 400
@@ -420,9 +383,6 @@ def api_chart_symbol_stats():
 @app.route("/api/chart/pairs")
 def api_chart_pairs():
     """Pares únicos que existen en la DB (para el selector del chart)."""
-    if not check_auth():
-        return jsonify({"error": "Unauthorized"}), 401
-
     rows = query(
         """
         SELECT DISTINCT ON (pair) pair, source_exchange FROM (
@@ -444,9 +404,6 @@ def api_chart_pairs():
 def api_chart_signals():
     """Devuelve señales cerradas + abiertas para un símbolo dado.
     Query params: symbol (requerido), from_ts, to_ts (opcionales, unix seconds)."""
-    if not check_auth():
-        return jsonify({"error": "Unauthorized"}), 401
-
     symbol = request.args.get("symbol", "")
     if not symbol:
         return jsonify({"error": "symbol required"}), 400
@@ -504,9 +461,6 @@ def api_chart_signals():
 @app.route("/api/chart/poll")
 def api_chart_poll():
     """Endpoint ultraligero para detectar cambios — el chart lo llama cada 2-3 seg."""
-    if not check_auth():
-        return jsonify({"error": "Unauthorized"}), 401
-
     symbol = request.args.get("symbol", "")
     symbol_slash = symbol if "/" in symbol else f"{symbol[:-4]}/{symbol[-4:]}" if len(symbol) > 4 else symbol
     symbol_raw   = symbol.replace("/", "")
@@ -559,7 +513,3 @@ def health():
 
 with app.app_context():
     init_db_pool()
-
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)

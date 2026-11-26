@@ -17,7 +17,8 @@ class WorkerScanSQLTests(unittest.TestCase):
             cur.execute("""CREATE TEMP TABLE tv_events (
                 id bigint PRIMARY KEY, payload jsonb, received_at timestamptz DEFAULT now(),
                 state text DEFAULT 'pending', applied_at timestamptz,
-                telegram_status text DEFAULT 'pending', onza_status text DEFAULT 'skipped', error text,
+                telegram_status text DEFAULT 'pending', error text,
+                telegram_attempts integer NOT NULL DEFAULT 0, telegram_next_attempt_at timestamptz,
                 telegram_result text, telegram_message_id bigint, signal_id text, event_type text, image_sequence bigint)""")
             cur.execute("CREATE TEMP TABLE telegram_channel_state(name text PRIMARY KEY,value text NOT NULL)")
             cur.execute("SELECT relpersistence FROM pg_class WHERE oid='tv_events'::regclass")
@@ -35,7 +36,7 @@ class WorkerScanSQLTests(unittest.TestCase):
 
     def state(self, n):
         with self.conn, self.conn.cursor() as cur:
-            cur.execute('SELECT state,telegram_status,onza_status FROM tv_events WHERE id=%s', (n,))
+            cur.execute('SELECT state,telegram_status FROM tv_events WHERE id=%s', (n,))
             return cur.fetchone()
 
     def test_fifty_orphans_do_not_starve_new_entry_and_wrap_retries_dependency(self):
@@ -53,10 +54,10 @@ class WorkerScanSQLTests(unittest.TestCase):
         with patch.object(worker, 'apply_event', side_effect=apply), patch.object(worker, 'post_telegram') as http:
             self.assertEqual(worker.apply_pending(), 0)
             self.assertEqual(worker.apply_pending(), 1)
-            self.assertEqual(self.state(51), ('applied', 'pending', 'skipped'))
+            self.assertEqual(self.state(51), ('applied', 'pending'))
             self.assertEqual(worker.apply_pending(), 1)
-            self.assertEqual(self.state(1), ('applied', 'pending', 'skipped'))
-            self.assertEqual(self.state(2), ('pending', 'pending', 'skipped'))
+            self.assertEqual(self.state(1), ('applied', 'pending'))
+            self.assertEqual(self.state(2), ('pending', 'pending'))
             self.assertEqual(calls.count(51), 1)
             http.assert_not_called()
 
@@ -105,6 +106,36 @@ class WorkerScanSQLTests(unittest.TestCase):
              patch.object(worker, "post_telegram") as http:
             self.assertFalse(worker.deliver_one("telegram"))
             http.assert_not_called()
+
+    def test_server_error_is_retried_later_and_fails_only_after_the_attempt_limit(self):
+        from telegram_delivery import TelegramDelivery
+        self.event(100)
+        with self.conn, self.conn.cursor() as cur:
+            cur.execute("UPDATE tv_events SET state='applied',signal_id='100',event_type='entry' WHERE id=100")
+        payload = {"signalId": "100", "typeSignal": "entry"}
+        failing = TelegramDelivery("pending", "HTTP 502", retry=True)
+        def attempts():
+            with self.conn, self.conn.cursor() as cur:
+                cur.execute("""SELECT telegram_status,telegram_attempts,
+                    telegram_next_attempt_at > now() FROM tv_events WHERE id=100""")
+                return cur.fetchone()
+        with patch.object(worker, "claim_delivery", return_value=(100,payload,None,None,None)), \
+             patch.object(worker, "post_telegram", return_value=failing):
+            self.assertTrue(worker.deliver_one("telegram"))
+            self.assertEqual(attempts(), ('pending', 1, True))
+            for _ in range(4):
+                worker.deliver_one("telegram")
+            self.assertEqual(attempts(), ('pending', 5, True))
+            worker.deliver_one("telegram")
+        self.assertEqual(attempts()[:2], ('failed', 6))
+        # Mientras espera su turno no se reclama; al vencer la espera, sí.
+        with self.conn, self.conn.cursor() as cur:
+            cur.execute("UPDATE tv_events SET telegram_status='pending',telegram_attempts=1,telegram_next_attempt_at=now()+interval '1 hour' WHERE id=100")
+        with patch.dict(os.environ, TELEGRAM_BOT_TOKEN="test", DESTINATION_CHANNEL_ID="-1"):
+            self.assertIsNone(worker.claim_delivery('telegram'))
+            with self.conn, self.conn.cursor() as cur:
+                cur.execute("UPDATE tv_events SET telegram_next_attempt_at=now()-interval '1 second' WHERE id=100")
+            self.assertEqual(worker.claim_delivery('telegram')[0], 100)
 
     def test_confirmed_and_ambiguous_messages_are_not_claimed_after_cooldown(self):
         for n, status in [(1,'delivered'),(2,'unknown'),(3,'sending'),(4,'failed')]:

@@ -11,20 +11,15 @@ from telegram_delivery import post_telegram
 
 
 class AuditLogTests(unittest.TestCase):
-    def setUp(self):
-        flag = patch.dict(os.environ, ONZA_ENABLED="true")
-        flag.start()
-        self.addCleanup(flag.stop)
-
     def test_unchanged_wait_is_logged_once_and_changed_reason_is_logged(self):
         _waits.clear()
         with patch("audit_log.audit") as log:
             for _ in range(1000):
-                audit_wait("ONZA EN ESPERA", event_id=7, motivo="Esperando entrada")
+                audit_wait("TELEGRAM EN ESPERA", event_id=7, motivo="Esperando entrada")
             self.assertEqual(log.call_count, 1)
-            audit_wait("ONZA EN ESPERA", event_id=7, motivo="Esperando TP1")
+            audit_wait("TELEGRAM EN ESPERA", event_id=7, motivo="Esperando TP1")
             self.assertEqual(log.call_count, 2)
-            audit_wait("ONZA EN ESPERA", event_id=8, motivo="Esperando entrada")
+            audit_wait("TELEGRAM EN ESPERA", event_id=8, motivo="Esperando entrada")
             self.assertEqual(log.call_count, 3)
         _waits.clear()
     def test_payload_secrets_and_message_are_not_logged(self):

@@ -1,4 +1,4 @@
-"""English Free channel and daily highest-TP reports. Durable, separate from Onza."""
+"""Canal Free en inglés y resúmenes por máximo TP. Cola durable, independiente del canal principal."""
 from __future__ import annotations
 
 from telegram_policy import suppression_for_signal
@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from psycopg2.extras import Json, RealDictCursor
 
 from audit_log import audit, audit_wait
+from telegram_http import FAILED, MAX_ATTEMPTS, RETRY, explicit_rejection, never_sent
 
 COLOMBIA = timezone(timedelta(hours=-5))
 APP_URL = "https://apps.apple.com/app/id6768534887"
@@ -227,20 +228,33 @@ def plan_weekly(cur, channel, now):
 
 
 def call_telegram(method, body):
+    """Devuelve (estado, message_id, detalle). 'pending' y 'retry' significan que nada se publicó."""
+    unconfirmed = "unknown",None,"No confirmation; manual reconciliation required"
     try:
         response = requests.post(f"https://api.telegram.org/bot{os.environ['TELEGRAM_BOT_TOKEN']}/{method}",json=body,timeout=15)
         data = response.json()
-        if response.status_code == 200 and isinstance(data,dict) and data.get("ok") is True:
-            result = data.get("result")
-            if method in ("pinChatMessage","unpinChatMessage"):
-                return "delivered",None,"confirmed"
-            if isinstance(result,dict) and type(result.get("message_id")) is int:
-                return "delivered",result["message_id"],"confirmed"
-        if response.status_code == 429:
-            return "pending",None,"rate limited"
+    except requests.RequestException as exc:
+        # Sin conexión la petición no salió: repetir no puede duplicar el mensaje.
+        return ("pending",None,"no connection; not sent") if never_sent(exc) else unconfirmed
+    except ValueError:
+        return unconfirmed
+    if not isinstance(data,dict):
+        return unconfirmed
+    if response.status_code == 200 and data.get("ok") is True:
+        result = data.get("result")
+        if method in ("pinChatMessage","unpinChatMessage"):
+            return "delivered",None,"confirmed"
+        if isinstance(result,dict) and type(result.get("message_id")) is int:
+            return "delivered",result["message_id"],"confirmed"
+        return unconfirmed
+    if data.get("ok") is not False:
+        return unconfirmed
+    kind,_wait = explicit_rejection(response.status_code,data)
+    if kind == FAILED:
         return "failed",None,f"HTTP {response.status_code}"
-    except (requests.RequestException,ValueError):
-        return "unknown",None,"No confirmation; manual reconciliation required"
+    if kind == RETRY:
+        return "retry",None,f"HTTP {response.status_code}; temporary"
+    return "pending",None,"rate limited" if response.status_code == 429 else f"HTTP {response.status_code}; bot access"
 
 
 def deliver(conn):
@@ -263,14 +277,24 @@ def deliver(conn):
                 if reason:
                     cur.execute("UPDATE telegram_publications SET status='skipped',detail=%s WHERE id=%s", (reason,job["id"]))
                     return True
-            cur.execute("UPDATE telegram_publications SET status='sending' WHERE id=%s",(job["id"],))
+            # RETURNING attempts: si el esquema aún no está migrado, falla aquí, antes de enviar nada.
+            cur.execute("UPDATE telegram_publications SET status='sending' WHERE id=%s RETURNING attempts",(job["id"],))
     body = dict(job["body"],chat_id=job["chat_id"])
     if job["parent_message"]:
         body["reply_parameters"] = {"message_id":job["parent_message"],"allow_sending_without_reply":False}
     status,msg,detail = call_telegram(job["method"],body)
     with conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("UPDATE telegram_publications SET status=%s,message_id=%s,detail=%s,available_at=now()+interval '60 seconds' WHERE id=%s",(status,msg,detail,job["id"]))
+            # Nada publicado: repetir con espera creciente (60 s, 2 min... hasta 1 h).
+            # Solo los 5xx ('retry') tienen límite de intentos; después quedan 'failed'.
+            waiting = status in ("pending","retry")
+            cur.execute("""UPDATE telegram_publications SET message_id=%s,detail=%s,
+                status=CASE WHEN %s AND attempts+1 >= %s THEN 'failed' WHEN %s THEN 'pending' ELSE %s END,
+                available_at=now()+LEAST(3600,60*power(2,CASE WHEN %s THEN LEAST(attempts,10) ELSE 0 END))*interval '1 second',
+                attempts=attempts+%s WHERE id=%s""",
+                (msg,detail,status == "retry",MAX_ATTEMPTS,waiting,status,waiting,int(waiting),job["id"]))
+            if waiting:
+                status = "pending"
             if status == "delivered" and job["pin_after"]:
                 enqueue(cur,job["job_key"]+":pin",job["chat_id"],"pinChatMessage",{"message_id":msg,"disable_notification":True})
             if status == "delivered" and job["method"] == "pinChatMessage":

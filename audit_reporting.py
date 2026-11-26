@@ -1,4 +1,4 @@
-"""Auditoría independiente de las colas de envío y del estado base del trade."""
+"""Informe de auditoría reconstruido desde los eventos guardados; solo lectura."""
 from collections import Counter, defaultdict
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -9,7 +9,7 @@ from audit_scenarios import MODES, evaluate, summarize
 AUDIT_SQL = """SELECT e.signal_id, s.id IS NOT NULL AS signal_exists,
     s.exchange, s.margin_used, s.be_activated_at,
     (to_jsonb(s)->>'be_stop_price')::numeric AS stored_be_stop_price,
-    e.id,e.event_type,e.payload,e.received_at,e.applied_at,e.onza_status,e.state,e.error,
+    e.id,e.event_type,e.payload,e.received_at,e.applied_at,e.telegram_status,e.state,e.error,
     r.final_profit_usdt AS recorded_pnl
     FROM tv_events e LEFT JOIN tv_signals s ON s.signal_id=e.signal_id
     LEFT JOIN trades t ON t.message_id=s.id
@@ -22,10 +22,10 @@ AUDIT_SQL = """SELECT e.signal_id, s.id IS NOT NULL AS signal_exists,
 
 
 def public_event(e):
-    # Never expose credentials from the immutable payload or delivery response.
+    # Solo campos elegidos: el payload completo y las respuestas de entrega no salen.
     return {"id": e["id"], "type": e["event_type"], "state": e.get("state", "applied"),
             "price": e["payload"].get("price", e["payload"].get("entry")),
-            "roi_pct": e["payload"].get("roi"), "onza_status": e["onza_status"],
+            "roi_pct": e["payload"].get("roi"), "telegram_status": e.get("telegram_status"),
             "received_at": e["received_at"].isoformat(),
             "applied_at": e["applied_at"].isoformat() if e.get("applied_at") else None}
 
@@ -78,8 +78,7 @@ def build_report(event_rows, *, mode, fallback_margin="20", filters=None):
         result.update({"source_exchange": meta.get("exchange"), "margin_recorded": meta.get("margin_used") is not None,
                        "be_persisted": meta.get("be_activated_at") is not None,
                        "stored_be_stop_price": float(meta["stored_be_stop_price"]) if meta.get("stored_be_stop_price") is not None else None,
-                       "onza_delivery": "delivered" if all(e["onza_status"] == "delivered" for e in events) else "pending_or_review",
-                       "delivery_counts": dict(Counter(e["onza_status"] for e in events)),
+                       "telegram_counts": dict(Counter(str(e.get("telegram_status")) for e in events)),
                        "recorded_pnl_usdt": round(float(recorded), 2) if recorded is not None else None,
                        "reconciliation_difference_usdt": difference,
                        "reconciliation_status": "match" if difference == 0 else "mismatch" if difference is not None else "missing_record" if baseline["closed"] else "open",

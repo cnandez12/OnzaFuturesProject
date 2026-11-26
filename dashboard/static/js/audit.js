@@ -37,8 +37,8 @@ function auditDetails(signal) {
   box.append(auditNode('h3','Conciliación con el registro original'));
   box.append(auditNode('p',`Registro guardado: ${auditMoney(signal.recorded_pnl_usdt)} · Reconstrucción sin BE: ${auditMoney(signal.scenarios.partial_no_be.pnl_usdt)} · Diferencia: ${auditMoney(signal.reconciliation_difference_usdt)} · ${signal.reconciliation_status}`));
   box.append(auditNode('h3','Eventos persistidos y entrega por evento'));
-  box.append(auditTable(['ID','Evento','Estado local','Precio','ROI recibido','Recibido · Colombia','Aplicado · Colombia','Entrega Onza'],
-    signal.events.map(e=>[e.id,e.type,e.state,e.price,auditPercent(e.roi_pct),auditDate(e.received_at),auditDate(e.applied_at),e.onza_status])));
+  box.append(auditTable(['ID','Evento','Estado local','Precio','ROI recibido','Recibido · Colombia','Aplicado · Colombia','Telegram'],
+    signal.events.map(e=>[e.id,e.type,e.state,e.price,auditPercent(e.roi_pct),auditDate(e.received_at),auditDate(e.applied_at),e.telegram_status])));
   return box;
 }
 function renderAuditChart(comparison) {
@@ -98,7 +98,7 @@ async function renderAudit() {
     if(!data.incidents.length)incidents.append(auditNode('p','No hay eventos excluidos por ausencia o inconsistencia de entrada.'));
     for(const incident of data.incidents) {
       const detail=auditNode('details',null,'audit-detail');detail.append(auditNode('summary',`${incident.signal_id} · ${incident.events.length} eventos · ${incident.reason}`));
-      detail.append(auditTable(['ID','Evento','Estado','Precio','Recibido Colombia','Entrega Onza'],incident.events.map(e=>[e.id,e.type,e.state,e.price,auditDate(e.received_at),e.onza_status])));incidents.append(detail);
+      detail.append(auditTable(['ID','Evento','Estado','Precio','Recibido Colombia','Telegram'],incident.events.map(e=>[e.id,e.type,e.state,e.price,auditDate(e.received_at),e.telegram_status])));incidents.append(detail);
     }
     status.textContent=`${data.rows.length} señales · corte ${auditDate(data.as_of)} · Colombia`;
   }catch(error){if(request!==auditRequest)return;auditData=null;summary.replaceChildren();body.replaceChildren();

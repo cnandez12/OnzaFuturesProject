@@ -4,7 +4,7 @@ Referencia: VORZA-Signal-API (1).pdf, noviembre 2026 (6 páginas), y asignación
 
 ## Estado y límites
 
-Mantener VORZA_ENABLED=false hasta que el administrador confirme una audiencia interna de pruebas. No se ha realizado ninguna publicación real de prueba. La clave se configura solo en Railway como VORZA_SIGNAL_KEY; no va al repositorio, logs ni base de datos.
+VORZA_ENABLED=true habilita publicaciones y acciones. Debe tener el mismo valor en el servicio web, que ejecuta setup_db.py y guarda el interruptor en la base, y en el worker VORZA: si difieren, el worker no publica y no registra ningún error. En una instalación nueva, mantener false hasta que el administrador confirme una audiencia interna de pruebas. La clave se configura solo en Railway como VORZA_SIGNAL_KEY; no va al repositorio, logs ni base de datos.
 
 La recepción TradingView, aplicación local de TP/SL/close, Telegram y dashboard no dependen de la respuesta VORZA. No cambiar Pine ni su URL. El worker VORZA publica entradas nuevas aplicadas y envía cierres por señal contraria de publicaciones confirmadas. TP1/TP2/TP3/SL no se publican como señales nuevas: VORZA los mide en Bitunix.
 
@@ -76,4 +76,4 @@ SQL opt-in: VORZA_TEST_DATABASE_URL. Exclusivamente tablas TEMP en la sesión, s
 
 ## Retiro del proveedor anterior
 
-No existe cliente HTTP ni proceso para el antiguo webhook. La configuración de ese publicador ya no tiene efecto y debe retirarse de Railway. Se preservan solo el historial de auditoría y nombres internos de contrato/tablas por compatibilidad. El backend de referencia no se inicia con el servicio; su sumidero antiguo quedó sin red.
+No existe cliente HTTP ni proceso para el antiguo webhook, y la copia del motor anterior se eliminó del repositorio. La configuración de ese publicador ya no tiene efecto y debe retirarse de Railway. En la base se conservan como historial las columnas onza_* de instalaciones anteriores; el código ya no las lee ni las escribe. VORZA es el único canal externo de señales.

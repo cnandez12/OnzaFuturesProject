@@ -13,7 +13,7 @@ def ledger(*kinds):
     for e in events(*kinds):
         rows.append(dict(e, event_type=e['typeSignal'], applied_at=e['received_at'],
                          signal_id='BTCUSD.P_15M_1', exchange='BINANCE', margin_used=Decimal('20'),
-                         signal_exists=True, state='applied', onza_status='delivered',
+                         signal_exists=True, state='applied', telegram_status='delivered',
                          be_activated_at=None, stored_be_stop_price=None, recorded_pnl=Decimal('-3.2')))
     return rows
 

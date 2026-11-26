@@ -3,6 +3,7 @@ import types
 import unittest
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+import os
 from unittest.mock import patch
 
 if "flask_cors" not in sys.modules:
@@ -59,12 +60,16 @@ class Connection:
 class AuditApiTests(unittest.TestCase):
     def setUp(self):
         self.client = receiver.app.test_client()
+        token = patch.dict(os.environ, {"DASHBOARD_TOKEN": "clave-panel"})
+        token.start()
+        self.addCleanup(token.stop)
+        receiver.response_cache.clear()
 
-    def test_results_are_public_and_be_mode_uses_saved_margin(self):
+    def test_results_need_the_password_and_be_mode_uses_saved_margin(self):
         signal_id = "BTCUSD.P_15M_1790559000000"
         base = {"signal_id": signal_id, "exchange": "BINANCE",
                 "margin_used": Decimal("20"), "be_activated_at": T0 + timedelta(minutes=1),
-                "onza_status": "delivered"}
+                "telegram_status": "delivered"}
         payload = {"entry": 100, "leverage": 20, "direction": "LONG",
                    "symbol": "BTCUSD.P", "timeframe": "15M"}
         rows = [dict(base, id=1, event_type="entry", payload=payload,
@@ -75,9 +80,17 @@ class AuditApiTests(unittest.TestCase):
                 dict(base, id=3, event_type="sl", payload={"price": 98},
                      received_at=T0 + timedelta(minutes=2),
                      applied_at=T0 + timedelta(minutes=2))]
-        with patch.object(receiver, "database_connection", return_value=Connection(rows)):
-            accepted = self.client.get("/api/audit/results?mode=partial_be")
+        with patch.object(receiver, "database_connection", return_value=Connection(rows)) as database:
+            refused = self.client.get("/api/audit/results?mode=partial_be")
+            accepted = self.client.get("/api/audit/results?mode=partial_be", auth=("onza", "clave-panel"))
+            other_mode = self.client.get("/api/audit/results?mode=max_tp", auth=("onza", "clave-panel"))
+        self.assertEqual(refused.status_code, 401)
         self.assertEqual(accepted.status_code, 200)
+        self.assertEqual(accepted.json["rows"][0]["events"][0]["telegram_status"], "delivered")
+        self.assertEqual(accepted.json["rows"][0]["telegram_counts"], {"delivered": 3})
+        # Cambiar de modo reutiliza la lectura reciente en vez de repetir la consulta completa.
+        self.assertEqual(other_mode.status_code, 200)
+        self.assertEqual(database.call_count, 1)
         self.assertEqual(accepted.json["rows"][0]["pnl_usdt"], 1.6)
         self.assertTrue(accepted.json["rows"][0]["be_activated"])
         self.assertFalse(accepted.json["rows"][0]["be_fill_verified"])

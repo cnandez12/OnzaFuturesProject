@@ -1,7 +1,8 @@
 """Procesa la cola durable y publica sin bloquear a TradingView.
 
-Una respuesta HTTP ambigua queda en 'unknown' o 'sending'. No se reintenta
-automáticamente para evitar publicaciones duplicadas en Telegram.
+Telegram: lo que con certeza no se publicó (sin red, 429, 5xx, permisos) se
+repite solo. Una respuesta ambigua queda en 'unknown' o 'sending' y no se
+repite: se revisa con telegram_review.py para no duplicar mensajes.
 """
 
 from __future__ import annotations
@@ -13,7 +14,6 @@ import atexit
 import signal
 import subprocess
 from pathlib import Path
-from decimal import Decimal
 from datetime import datetime, timezone
 
 import psycopg2
@@ -24,6 +24,7 @@ from telegram_policy import closing_suppression
 from onza_contract import InvalidSignal
 from telegram_delivery import post_telegram
 from telegram_rate import ready as telegram_ready, defer as telegram_defer, SPACING_SECONDS
+from telegram_http import MAX_ATTEMPTS as TELEGRAM_MAX_ATTEMPTS
 from onza_processing import DeferredEvent, apply_event
 from audit_log import audit, audit_wait
 
@@ -85,7 +86,6 @@ def apply_pending(limit=50) -> int:
                         cur.execute("ROLLBACK TO SAVEPOINT local_event")
                         cur.execute(
                             """UPDATE tv_events SET state='rejected', error=%s,
-                               onza_status=CASE WHEN onza_status='pending' THEN 'skipped' ELSE onza_status END,
                                telegram_status='skipped' WHERE id=%s""",
                             (str(exc), event_id),
                         )
@@ -114,6 +114,7 @@ def claim_delivery(channel: str):
             return None
         cur.execute("""SELECT id,signal_id,event_type,payload,received_at,telegram_status
          FROM tv_events WHERE state='applied' AND telegram_status='pending'
+         AND (telegram_next_attempt_at IS NULL OR telegram_next_attempt_at <= now())
          ORDER BY id LIMIT 500 FOR UPDATE SKIP LOCKED""")
         for event in cur.fetchall():
             cur.execute("SELECT event_type,telegram_status,payload,state FROM tv_events WHERE signal_id=%s",(event['signal_id'],))
@@ -164,8 +165,14 @@ def deliver_one(channel: str) -> bool:
           duracion_ms=round((time.monotonic()-started)*1000))
     try:
         with connect() as conn,conn.cursor() as cur:
-            cur.execute("""UPDATE tv_events SET telegram_status=%s,telegram_result=%s,
-             telegram_message_id=%s WHERE id=%s""",(result.status,result.detail,result.message_id,event_id))
+            # Un 5xx se repite con espera creciente (15 s, 30 s, 60 s...) hasta el límite;
+            # las pausas de canal (429, sin red, permisos) no consumen intentos.
+            capped=result.status=='pending' and result.retry
+            cur.execute("""UPDATE tv_events SET telegram_message_id=%s,telegram_result=%s,
+             telegram_status=CASE WHEN %s AND telegram_attempts+1 >= %s THEN 'failed' ELSE %s END,
+             telegram_next_attempt_at=CASE WHEN %s THEN now()+LEAST(600,15*power(2,LEAST(telegram_attempts,10)))*interval '1 second' END,
+             telegram_attempts=telegram_attempts+%s WHERE id=%s""",
+             (result.message_id,result.detail,capped,TELEGRAM_MAX_ATTEMPTS,result.status,capped,int(capped),event_id))
             if result.retry_after:
                 telegram_defer(cur, result.retry_after)
             if payload['typeSignal']=='entry' and result.status=='delivered':

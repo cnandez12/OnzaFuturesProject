@@ -8,7 +8,7 @@ class PublicResultsTests(unittest.TestCase):
   public=project_public(report,1000)
   self.assertEqual(public['return_pct'],.16)
   self.assertEqual(public['signals'][0]['pnl_usdt'],1.6)
-  for key in ('events','scenarios','onza_delivery','delivery_counts','recorded_pnl_usdt','source_exchange'):
+  for key in ('events','scenarios','telegram_counts','recorded_pnl_usdt','source_exchange'):
    self.assertNotIn(key,public['signals'][0])
   self.assertNotIn('incidents',public)
  def test_missing_capital_is_not_reported_as_a_return(self):
@@ -19,8 +19,13 @@ class PublicApiTests(unittest.TestCase):
   from unittest.mock import patch
   from test_audit_api import Connection
   import app
-  with patch.object(app,'database_connection',return_value=Connection(ledger('tp1','sl'))):
+  app.response_cache.clear()
+  with patch.object(app,'database_connection',return_value=Connection(ledger('tp1','sl'))) as database:
    response=app.app.test_client().get('/api/public/results')
+   again=app.app.test_client().get('/api/public/results')
+  # Las visitas simultáneas comparten un mismo cálculo durante unos segundos.
+  self.assertEqual(again.json,response.json)
+  self.assertEqual(database.call_count,1)
   self.assertEqual(response.status_code,200)
   self.assertEqual(response.headers['Access-Control-Allow-Origin'],'*')
   self.assertEqual(response.json['signals'][0]['pnl_usdt'],1.6)

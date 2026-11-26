@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import patch
 
 import worker
+from telegram_delivery import TelegramDelivery
 
 
 class Cursor:
@@ -50,23 +51,44 @@ class Connection:
         return self.saved_cursor
 
 
-class WorkerPriorityTests(unittest.TestCase):
-    def setUp(self):
-        flag = patch.dict(os.environ, ONZA_ENABLED="true")
-        flag.start()
-        self.addCleanup(flag.stop)
+TELEGRAM_ENV = {"TELEGRAM_BOT_TOKEN": "test", "DESTINATION_CHANNEL_ID": "-1"}
 
-    def test_confirmed_entry_saves_telegram_parent_for_same_signal(self):
-        from telegram_delivery import TelegramDelivery
+
+class WorkerPriorityTests(unittest.TestCase):
+    def deliver(self, result, payload=None):
         cursor = Cursor({})
-        payload = {"signalId": "signal-A", "typeSignal": "entry"}
+        payload = payload or {"signalId": "signal-A", "typeSignal": "tp1"}
         with patch.object(worker, "claim_delivery", return_value=(7, payload, None, None, None)), \
-             patch.object(worker, "post_telegram", return_value=TelegramDelivery("delivered", "HTTP 200", 458, "-100123")), \
+             patch.object(worker, "post_telegram", return_value=result), \
              patch.object(worker, "connect", return_value=Connection(cursor)):
             self.assertTrue(worker.deliver_one("telegram"))
+        return cursor
+
+    def test_confirmed_entry_saves_telegram_parent_for_same_signal(self):
+        cursor = self.deliver(TelegramDelivery("delivered", "HTTP 200", 458, "-100123"),
+                              {"signalId": "signal-A", "typeSignal": "entry"})
         index = next(i for i, sql in enumerate(cursor.sql) if "UPDATE tv_signals" in sql)
         self.assertEqual(cursor.params[index], (458, "-100123", "signal-A"))
         self.assertIn("telegram_message_id", cursor.sql[0])
+        # Una entrega confirmada no cuenta intentos ni programa otro envío.
+        self.assertEqual(cursor.params[0], (458, "HTTP 200", False, 6, "delivered", False, 0, 7))
+
+    def test_temporary_server_error_is_rescheduled_and_counts_an_attempt(self):
+        cursor = self.deliver(TelegramDelivery("pending", "HTTP 502", retry=True))
+        self.assertIn("telegram_next_attempt_at", cursor.sql[0])
+        self.assertIn("THEN 'failed'", cursor.sql[0])
+        self.assertEqual(cursor.params[0], (None, "HTTP 502", True, 6, "pending", True, 1, 7))
+        self.assertFalse(any("telegram_channel_state" in sql for sql in cursor.sql))
+
+    def test_channel_pause_keeps_the_event_pending_without_spending_attempts(self):
+        cursor = self.deliver(TelegramDelivery("pending", "Sin conexion", retry_after=15))
+        self.assertEqual(cursor.params[0], (None, "Sin conexion", False, 6, "pending", False, 0, 7))
+        pause = next(i for i, sql in enumerate(cursor.sql) if "telegram_channel_state" in sql)
+        self.assertEqual(cursor.params[pause][1], 15)
+
+    def test_ambiguous_result_is_stored_as_is_for_manual_review(self):
+        cursor = self.deliver(TelegramDelivery("unknown", "Tiempo de espera agotado"))
+        self.assertEqual(cursor.params[0][2:7], (False, 6, "unknown", False, 0))
 
     def test_local_event_is_applied_without_downstream_http(self):
         event={"id":7,"payload":{"signalId":"s","typeSignal":"entry"},"received_at":None}
@@ -78,55 +100,36 @@ class WorkerPriorityTests(unittest.TestCase):
         apply.assert_called_once_with(cursor,event['payload'],None)
         telegram.assert_not_called()
 
-    def test_retired_channel_cannot_be_reenabled_by_environment(self):
-        with patch.dict(os.environ,ONZA_ENABLED='true',ONZA_API_KEY='test'),patch.object(worker,'connect') as database:
-            with self.assertRaises(ValueError):worker.claim_delivery('onza')
-        database.assert_not_called()
-
     def test_telegram_preserves_local_predecessor_order(self):
         event = {"id": 8, "signal_id": "s", "event_type": "tp1",
-                 "payload": {}, "onza_status": "unknown", "telegram_status": "pending"}
+                 "payload": {}, "telegram_status": "pending"}
         cursor = Cursor(event)
         cursor.fetchall = lambda: [event] if "FOR UPDATE SKIP LOCKED" in cursor.current else [
             {"event_type": "entry", "state": "applied", "telegram_status": "pending"}]
-        with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test", "DESTINATION_CHANNEL_ID": "-1"}), \
+        with patch.dict(os.environ, TELEGRAM_ENV), \
              patch.object(worker, "connect", return_value=Connection(cursor)):
             self.assertIsNone(worker.claim_delivery("telegram"))
 
-    def test_local_processing_has_bounded_priority_without_response_dependency(self):
-        cursor = Cursor({})
-        with patch.object(worker, "connect", return_value=Connection(cursor)):
-            self.assertEqual(worker.apply_pending(), 0)
-        self.assertNotIn("onza_started_at", cursor.sql[0])
-        self.assertNotIn("interval '1 second'", cursor.sql[0])
-        self.assertNotIn("onza_status", cursor.sql[0])
-
-    def test_telegram_claim_is_independent_of_every_onza_status(self):
+    def test_claim_takes_only_pending_events_whose_wait_has_ended(self):
         for kind in ("entry", "tp1", "tp2", "tp3", "sl"):
-            for status in ("pending", "sending", "unknown", "failed", "skipped", "delivered"):
-                with self.subTest(kind=kind, status=status):
-                    event = {"id": 7, "signal_id": "s", "event_type": kind,
-                             "payload": {}, "onza_status": status, "telegram_status": "pending"}
-                    cursor = Cursor(event)
-                    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test", "DESTINATION_CHANNEL_ID": "-1"}), \
-                         patch.object(worker, "connect", return_value=Connection(cursor)):
-                        claimed = worker.claim_delivery("telegram")
-                    self.assertIsNotNone(claimed)
-                    self.assertEqual(claimed[0],7)
-                    self.assertTrue(any("state='applied' AND telegram_status='pending'" in sql for sql in cursor.sql))
-                    self.assertNotIn("AND onza_status=", cursor.sql[0])
-
-    def test_retired_worker_role_exits_before_database_or_network(self):
-        import sys
-        with patch.object(sys,'argv',['worker.py','onza']),patch.object(worker,'connect') as database:
-            with self.assertRaises(SystemExit):worker.main()
-        database.assert_not_called()
+            with self.subTest(kind=kind):
+                event = {"id": 7, "signal_id": "s", "event_type": kind,
+                         "payload": {}, "telegram_status": "pending"}
+                cursor = Cursor(event)
+                with patch.dict(os.environ, TELEGRAM_ENV), \
+                     patch.object(worker, "connect", return_value=Connection(cursor)):
+                    claimed = worker.claim_delivery("telegram")
+                self.assertIsNotNone(claimed)
+                self.assertEqual(claimed[0],7)
+                query = next(sql for sql in cursor.sql if "FOR UPDATE SKIP LOCKED" in sql)
+                self.assertIn("state='applied' AND telegram_status='pending'", query)
+                self.assertIn("telegram_next_attempt_at <= now()", query)
 
     def test_result_claim_assigns_persistent_image_sequence(self):
         event = {"id": 8, "signal_id": "s", "event_type": "tp1",
-                 "payload": {}, "onza_status": "delivered", "telegram_status": "pending"}
+                 "payload": {}, "telegram_status": "pending"}
         cursor = Cursor(event)
-        with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test", "DESTINATION_CHANNEL_ID": "-1"}), \
+        with patch.dict(os.environ, TELEGRAM_ENV), \
              patch.object(worker, "connect", return_value=Connection(cursor)):
             claimed = worker.claim_delivery("telegram")
         self.assertEqual(claimed[3], 1)
