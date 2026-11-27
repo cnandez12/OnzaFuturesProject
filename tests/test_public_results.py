@@ -28,7 +28,7 @@ class PublicApiTests(unittest.TestCase):
   self.assertEqual(database.call_count,1)
   self.assertEqual(response.status_code,200)
   self.assertEqual(response.headers['Access-Control-Allow-Origin'],'*')
-  self.assertEqual(response.json['signals'][0]['pnl_usdt'],20.0)
+  self.assertEqual(response.json['signals'][0]['pnl_usdt'],50.0)
  def test_public_api_does_not_accept_mutating_requests(self):
   import app
   self.assertEqual(app.app.test_client().post('/api/public/results').status_code,405)

@@ -16,7 +16,7 @@ test('an open-state change reloads positions and redraws the visible page',async
     if(url==='/api/sim/pulse')data=pulse;
     else if(url.startsWith('/api/sim/history'))data=[];
     else if(url==='/api/sim/stats')data={};
-    else if(url==='/api/sim/open'){openCalls++;data=[{id:1,tp1_filled:true}]}
+    else if(url==='/api/sim/open?live=1'){openCalls++;data=[{id:1,tp1_filled:true}]}
     else if(url==='/api/sim/symbols')data=[];
     else throw Error(url);
     return {ok:true,status:200,json:async()=>data};

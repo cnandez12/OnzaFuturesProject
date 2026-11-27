@@ -57,10 +57,10 @@ async function loadAll() {
   const failures = [h,s,o,sym,pulse].filter(x => x.status === 'rejected');
   const reconstructed = trades.filter(t => t.source === 'reconstructed').length;
   const latestMargin = Number(stats.last_recorded_margin);
-  const marginMismatch = latestMargin > 0 && Math.abs(latestMargin - CFG.margin) > .0001;
+  const marginMismatch = false; // margin varies with stop distance under fixed-risk sizing
   showDataStatus(failures.length
     ? `Datos incompletos o desactualizados: ${failures.length} consultas fallaron. Última carga parcial ${new Date().toLocaleTimeString('es')}.`
-    : `Cuenta simulada 5.000 USDT · margen 250 USDT · 40/40/20 con BE · ${trades.length} cierres desde TradingView · actualizado ${new Date().toLocaleTimeString('es')}`
+    : `Escenarios independientes · base 10.000 USDT · riesgo 250 USDT al SL original (2,5% inicial) · 40/40/20 con BE · ${trades.length} cierres desde TradingView · actualizado ${new Date().toLocaleTimeString('es')}`
       + (marginMismatch ? ' · AVISO: margen configurado distinto del último cierre; P&L abierto estimado.' : ''),
     failures.length > 0 || marginMismatch);
   if (failures.length) console.error('Dashboard data load failed:', failures.map(x => x.reason));

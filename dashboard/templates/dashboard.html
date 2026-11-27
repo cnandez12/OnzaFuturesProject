@@ -104,7 +104,7 @@
     <div>
       <div class="mission-eyebrow"><span class="live-dot"></span> Centro de señales <span class="scope-pill">40/40/20 + BE</span></div>
       <h1>Inteligencia de <span class="gradient-text">señales</span></h1>
-      <p>Cuenta simulada desde 5.000 USDT · margen de 250 USDT por señal · gestión 40/40/20 con BE.</p>
+      <p>Escenarios independientes · base comparativa de 10.000 USDT · riesgo de 250 USDT al SL original (2,5% inicial) · gestión 40/40/20 con BE.</p>
     </div>
     <div class="mission-actions">
       <button class="mission-btn" type="button" onclick="openSignalSearch()">⌕ <span>Buscar señal</span></button>
@@ -236,7 +236,7 @@
 <section id="pg-simulator" class="page">
 
   <header class="mission-head page-intro sim-hero">
-    <div><div class="mission-eyebrow">Laboratorio de escenarios</div><h1>Simulador de estrategia</h1><p>Recalcula las señales registradas con capital, margen, apalancamiento y distribución TP personalizados.</p></div>
+    <div><div class="mission-eyebrow">Laboratorio de escenarios</div><h1>Simulador de estrategia</h1><p>Recalcula las señales registradas con base comparativa, riesgo al SL, apalancamiento y distribución TP personalizados. Escenarios independientes, sin excluir entradas por capital disponible.</p></div>
   </header>
 
   <div class="sim-inputs-card card">
@@ -246,7 +246,7 @@
         <input class="form-input" type="number" id="sim-balance" value="{{ initial_balance }}" min="50" step="50">
       </div>
       <div class="form-group">
-        <label class="form-label">Margen / trade</label>
+        <label class="form-label">Riesgo al SL / señal</label>
         <input class="form-input" type="number" id="sim-margin" value="{{ margin }}" min="1" step="1">
       </div>
       <div class="form-group">
@@ -278,7 +278,7 @@
       <div class="form-group">
         <label class="form-label">Gestión de riesgo</label>
         <select class="form-select" id="sim-compounding">
-          <option value="fixed">Margen fijo</option>
+          <option value="fixed">Riesgo fijo</option>
           <option value="pct">% del balance</option>
         </select>
       </div>
@@ -372,7 +372,7 @@
     <div class="sim-panel-body">
       <div class="sim-config-row"><span class="sim-config-key">Balance inicial</span><span class="sim-config-val">${{ initial_balance }}</span></div>
       <hr class="sim-divider" style="margin:8px 0">
-      <div class="sim-config-row"><span class="sim-config-key">Margen / trade</span><span class="sim-config-val">${{ margin }}</span></div>
+      <div class="sim-config-row"><span class="sim-config-key">Riesgo al SL / señal</span><span class="sim-config-val">${{ margin }}</span></div>
       <div class="sim-config-row"><span class="sim-config-key">Apalancamiento</span><span class="sim-config-val">×{{ leverage }}</span></div>
       <div class="sim-config-row"><span class="sim-config-key">Notional / trade</span><span class="sim-config-val">${{ margin * leverage if margin and leverage else "?" }}</span></div>
       <hr class="sim-divider" style="margin:8px 0">
@@ -633,9 +633,9 @@
   <div id="audit-coverage" class="card audit-note" role="status"></div>
   <div id="audit-summary" class="kpi-grid" aria-live="polite"></div>
   <div class="card audit-card"><div class="card-head"><strong>Comparación sobre la misma selección</strong></div><div id="audit-comparison"></div><p id="audit-conclusion" class="audit-note"></p></div>
-  <div class="card audit-card"><div class="card-head"><strong>P&L acumulado de cierres por estrategia</strong><span class="card-sub">Margen histórico · sin reinversión</span></div><div class="audit-curve"><canvas id="audit-curve" aria-label="Comparación del P&L de las tres estrategias" role="img"></canvas></div></div>
+  <div class="card audit-card"><div class="card-head"><strong>P&L acumulado de cierres por estrategia</strong><span class="card-sub">Escenarios independientes · riesgo fijo al SL · sin reinversión</span></div><div class="audit-curve"><canvas id="audit-curve" aria-label="Comparación del P&L de las tres estrategias" role="img"></canvas></div></div>
   <div class="card audit-card audit-scroll"><div class="card-head"><strong>Señales y detalle de cálculo</strong><span id="audit-status" class="card-sub"></span></div>
-    <table class="audit-table" style="min-width:1100px"><thead><tr><th>ID / entrada Colombia</th><th>Símbolo / dirección / TF</th><th>Margen histórico</th><th>Máximo TP</th><th>Regla BE</th><th>Salida escenario</th><th>P&L cerrado</th><th>Parciales base registrados</th><th>Conciliación original</th></tr></thead><tbody id="audit-rows"></tbody></table>
+    <table class="audit-table" style="min-width:1100px"><thead><tr><th>ID / entrada Colombia</th><th>Símbolo / dirección / TF</th><th>Margen teórico</th><th>Máximo TP</th><th>Regla BE</th><th>Salida escenario</th><th>P&L cerrado</th><th>Parciales base registrados</th><th>Conciliación original</th></tr></thead><tbody id="audit-rows"></tbody></table>
   </div>
   <div class="card audit-card"><div class="card-head"><strong>Incidencias globales · eventos excluidos del cálculo</strong></div><p class="audit-note">Estos eventos permanecen guardados. Se muestran sus estados; la auditoría no los reenvía ni reprocesa. Las incidencias globales no se ocultan con los filtros de rendimiento.</p><div id="audit-incidents"></div></div>
 </section>
@@ -649,19 +649,19 @@
 <script src="/static/js/config.js"></script>
 <script src="/static/js/utils.js?v=account-5000-1"></script>
 <script src="/static/js/trade-math.js?v=account-5000-1"></script>
-<script src="/static/js/api.js?v=live-visibility-1-account-5000-1"></script>
+<script src="/static/js/api.js?v=fixed-risk-250-1"></script>
 <script src="/static/js/nav.js"></script>
 <script src="/static/js/kpis.js"></script>
 <script src="/static/js/distributions.js"></script>
 <script src="/static/js/recent.js"></script>
 <script src="/static/js/simulator.js"></script>
-<script src="/static/js/open-positions.js?v=live-market-3"></script>
+<script src="/static/js/open-positions.js?v=fixed-risk-250-1"></script>
 <script src="/static/js/mission-control.js?v=live-market-2"></script>
 <script src="/static/js/history.js"></script>
 <script src="/static/js/curve.js"></script>
 <script src="/static/js/symbols.js"></script>
 <script src="/static/js/fb-chart.js?v=market-status-1"></script>
-<script src="/static/js/audit.js?v=4"></script>
+<script src="/static/js/audit.js?v=fixed-risk-250-1"></script>
 <script src="/static/js/timers.js"></script>
 <script src="/static/js/app.js"></script>
 </body>

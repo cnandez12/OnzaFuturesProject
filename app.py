@@ -16,7 +16,7 @@ from audit_scenarios import MODES
 from audit_reporting import AUDIT_SQL, build_report
 from onza_contract import InvalidSignal, canonicalize
 from audit_log import audit
-from presentation_config import TRADE_MARGIN, metadata as presentation_metadata
+from presentation_config import RISK_PER_TRADE, metadata as presentation_metadata
 from dashboard_auth import install_dashboard_auth
 from public_website import install_public_website
 from request_limits import TTLCache, slow_route
@@ -180,7 +180,7 @@ def audit_results():
         report = build_report(event_rows, mode=mode,
                               fallback_margin=os.getenv("MARGIN_PER_TRADE", "20"),
                               filters={key: request.args.get(key, "") for key in ("from", "to", "status", "search")},
-                              margin_override=TRADE_MARGIN)
+                              risk_override=RISK_PER_TRADE)
         report["presentation"] = presentation_metadata()
         return jsonify(report)
     except ValueError as exc:
@@ -328,7 +328,7 @@ def public_results():
     try:
         return jsonify(response_cache.get(
             "public-results", PUBLIC_RESULTS_TTL,
-            lambda: load_public(database_connection, INITIAL_BALANCE, price_loader=public_market_marks, margin_override=TRADE_MARGIN)))
+            lambda: load_public(database_connection, INITIAL_BALANCE, price_loader=public_market_marks, risk_override=RISK_PER_TRADE)))
     except (psycopg2.Error, RuntimeError, ValueError):
         return jsonify(error="Registro temporalmente no disponible"), 503
 

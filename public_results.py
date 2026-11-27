@@ -92,17 +92,17 @@ def project_public(report, capital, marks=None, quote_as_of=None, market_states=
     allowed = ('signal_id','symbol','direction','timeframe','entry_price','original_stop','targets',
                'max_tp','be_activated','be_stop_price','be_activated_at','closed','close_reason',
                'received_at','closed_at','pnl_usdt','roi_pct','recorded_partial_pnl_usdt','legs',
-               'remaining_fraction','leverage','margin_used')
+               'remaining_fraction','leverage','margin_used','risk_usdt','sizing_mode','roi_basis')
     featured,performance=select_featured(report['rows'],marks or {},market_states=market_states)
     preview_ids={r['signal_id'] for r in featured if not r['closed']}
     featured_ranks={r['signal_id']:i for i,r in enumerate(featured)}
     sensitive = {'entry_price','original_stop','targets','be_stop_price',
                  'be_activated_at','pnl_usdt','roi_pct','recorded_partial_pnl_usdt',
-                 'legs','remaining_fraction','leverage','margin_used'}
+                 'legs','remaining_fraction','leverage','margin_used','risk_usdt'}
     signals = []
     for row in report['rows']:
         visible = row['closed'] or row['signal_id'] in preview_ids
-        public_row = {key: row[key] for key in allowed if visible or key not in sensitive}
+        public_row = {key: row[key] for key in allowed if key in row and (visible or key not in sensitive)}
         public_row['live_eligible']=market_states.get(canonical(row['symbol']),{}).get('visible',canonical(row['symbol']) not in LIVE_EXCLUDED)
         public_row['prices_visible'] = visible
         public_row['visibility'] = 'history' if row['closed'] else ('preview' if visible else 'protected')
@@ -128,7 +128,7 @@ def project_public(report, capital, marks=None, quote_as_of=None, market_states=
             'methodology':'El trading de futuros conlleva un alto nivel de riesgo. El apalancamiento puede amplificar tanto las ganancias como las pérdidas, y puede ocasionar la pérdida del capital invertido. La información presentada tiene fines informativos y no constituye asesoramiento financiero. Los resultados pasados no garantizan resultados futuros. Evalúa tu situación financiera y tolerancia al riesgo antes de operar.', 'risk_disclaimer':'El trading de futuros conlleva un alto nivel de riesgo. El apalancamiento puede amplificar tanto las ganancias como las pérdidas, y puede ocasionar la pérdida del capital invertido. La información presentada tiene fines informativos y no constituye asesoramiento financiero. Los resultados pasados no garantizan resultados futuros. Evalúa tu situación financiera y tolerancia al riesgo antes de operar.'}
 
 
-def load_public(connection, capital, price_loader=None, margin_override=None, status_loader=None):
+def load_public(connection, capital, price_loader=None, margin_override=None, status_loader=None, risk_override=None):
     conn=connection()
     try:
         conn.set_session(readonly=True,isolation_level='REPEATABLE READ')
@@ -138,12 +138,12 @@ def load_public(connection, capital, price_loader=None, margin_override=None, st
                 cur.execute(AUDIT_SQL)
                 rows=cur.fetchall()
     finally:conn.close()
-    report=build_report(rows,mode='partial_be',margin_override=margin_override)
+    report=build_report(rows,mode='partial_be',margin_override=margin_override,risk_override=risk_override)
     loader=price_loader or public_market_marks
     marks,quote_as_of=loader([r['symbol'] for r in report['rows'] if not r['closed']])
     states=(status_loader or live_market_states)([r['symbol'] for r in report['rows']])
     result=project_public(report,capital,marks,quote_as_of,market_states=states)
-    if margin_override is not None:
+    if margin_override is not None or risk_override is not None:
         from presentation_config import metadata
         result["presentation"]=metadata()
     return result

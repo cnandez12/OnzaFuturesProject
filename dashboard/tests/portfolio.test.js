@@ -31,7 +31,7 @@ function run(trades, options={}) {
   vm.runInContext('runSimulator()',context);
   return id=>el(id).textContent;
 }
-const base = {direction:'LONG',entry_price:100,exit_price:100,margin_used:20,leverage:20,
+const base = {direction:'LONG',entry_price:100,stop_loss:95,exit_price:100,margin_used:20,leverage:20,
   hit_tp1:false,hit_tp2:false,hit_tp3:false,close_reason:'Closed',symbol:'TEST'};
 test('overlapping profits credit at close, not when the trade opens',()=>{
   const a={...base,id:1,exit_price:95,final_profit_usdt:-20,

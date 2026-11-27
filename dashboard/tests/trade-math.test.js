@@ -32,12 +32,12 @@ test('recorded P&L remains authoritative when an old row cannot reconcile', () =
   close(tradeScenario(t,[.2,.4,.4]).rate * 400, 96);
   close(tradeScenario(t,[.4,.4,.2]).discrepancy, -8);
 });
-test('open position keeps highest TP despite price retracement', () => {
+test('open position preserves realized partial and marks the remaining exposure', () => {
   const p = {entry:100,direction:'LONG',margin_used:20,leverage:20,tp1:110,tp1_filled:true,tp2_filled:false,pnl_accumulated:16};
   const r = openPositionPnl(p,105);
-  close(r.accumulated,40);close(r.floating,20);close(r.net,40);close(r.netPct,200);
+  close(r.accumulated,16);close(r.floating,12);close(r.net,28);close(r.netPct,140);
   const stale = openPositionPnl(p,null);
-  close(stale.accumulated,40);assert.equal(stale.floating,null);close(stale.net,40);
+  close(stale.accumulated,16);assert.equal(stale.floating,null);assert.equal(stale.net,null);
 });
 
 test('SHORT legs reverse price direction without changing sold fractions', () => {
@@ -47,7 +47,7 @@ test('SHORT legs reverse price direction without changing sold fractions', () =>
   close(tradeScenario(t,[.4,.4,.2]).rate * 400, 40);
   const open = openPositionPnl({entry:100,direction:'SHORT',margin_used:20,leverage:20,
     tp1:90,tp1_filled:true,tp2_filled:false,pnl_accumulated:16},95);
-  close(open.floating,20);close(open.net,40);
+  close(open.floating,12);close(open.net,28);
 });
 
 test('historical unweighted TP fields do not alter weighted TP display', () => {

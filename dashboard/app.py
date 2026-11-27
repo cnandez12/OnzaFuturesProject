@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from datetime import datetime, date
 from market_visibility import canonical, live_market_states
 from dashboard.presentation import project_sql
-from presentation_config import INITIAL_CAPITAL, TRADE_MARGIN, metadata as presentation_metadata
+from presentation_config import INITIAL_CAPITAL, RISK_PER_TRADE, metadata as presentation_metadata
 
 load_dotenv()
 
@@ -24,7 +24,7 @@ if _allowed_origins:
 
 DATABASE_URL    = os.getenv("DATABASE_URL", "")
 INITIAL_BALANCE = float(INITIAL_CAPITAL)
-MARGIN_PER_TRADE = float(TRADE_MARGIN)
+MARGIN_PER_TRADE = float(RISK_PER_TRADE)
 LEVERAGE        = int(os.getenv("LEVERAGE", "20"))
 DASHBOARD_TITLE = "CryptoPilot AI | Señales de TradingView"
 
@@ -146,6 +146,8 @@ def rows_to_list(rows):
     result = []
     for row in rows:
         d = dict(row)
+        if "margin_used" in d:
+            d["risk_usdt"] = float(RISK_PER_TRADE)
         if "final_profit_usdt" in d:
             d["display_mode"] = "partial_be"
         for k, v in d.items():
@@ -237,7 +239,8 @@ def api_stats():
     # no del balance_after que escribe el bot (evita desfases por compounding/fees).
     result["last_balance"] = INITIAL_BALANCE + float(result.get("total_pnl_usdt") or 0)
     result["initial_balance"] = INITIAL_BALANCE
-    result["margin_per_trade"] = MARGIN_PER_TRADE
+    result["margin_per_trade"] = None
+    result["risk_per_trade"] = float(RISK_PER_TRADE)
     result["leverage"] = LEVERAGE
     result["presentation"] = presentation_metadata()
     return jsonify(result)
@@ -276,7 +279,7 @@ def api_open():
     rows = query(
         """
         SELECT message_id AS id, pair, side AS direction, source_exchange,
-               %s::numeric AS margin_used, leverage,
+               display_margin_used AS margin_used, leverage,
                entry, stop_loss, tp1, tp2, tp3,
                tp1_filled, tp2_filled, tp3_filled, date,
                be_active,
@@ -286,7 +289,7 @@ def api_open():
         WHERE close = FALSE
         ORDER BY date DESC
         """,
-        (MARGIN_PER_TRADE,),
+        (),
         fetch_all=True,
     )
     if rows is None:
@@ -442,7 +445,7 @@ def api_chart_signals():
     open_trades = query(
         """
         SELECT message_id AS id, pair AS symbol, side AS direction,
-               %s::numeric AS margin_used, leverage,
+               display_margin_used AS margin_used, leverage,
                entry AS entry_price, stop_loss,
                tp1, tp2, tp3,
                tp1_filled AS hit_tp1, tp2_filled AS hit_tp2, tp3_filled AS hit_tp3,
@@ -451,7 +454,7 @@ def api_chart_signals():
         WHERE close = FALSE AND (pair = %s OR pair = %s)
         ORDER BY date DESC
         """,
-        (MARGIN_PER_TRADE, symbol_raw, symbol_slash),
+        (symbol_raw, symbol_slash),
         fetch_all=True,
     )
     if closed is None or open_trades is None:

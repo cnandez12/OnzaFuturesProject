@@ -112,9 +112,9 @@ function exportAudit(format) {
   if(format==='json'){content=JSON.stringify(auditData,null,2);type='application/json';}
   else {
     const quote=value=>{let text=value==null?'':String(value);if(typeof value==='string' && /^[=+\-@]/.test(text))text="'"+text;return '"'+text.replace(/"/g,'""')+'"';};
-    const rows=[['signal_id','estrategia','símbolo','dirección','fecha_entrada','margen','apalancamiento','entrada','stop_original','BE_activado','stop_BE','estado','P&L_cerrado_USDT','ROI_margen','tramo','fracción_inicial','precio_salida','P&L_tramo_USDT','fecha_tramo','base_cálculo','remanente','P&L_registro_original','diferencia_original']];
+    const rows=[['signal_id','estrategia','símbolo','dirección','fecha_entrada','margen_teórico','riesgo_SL_USDT','apalancamiento','entrada','stop_original','BE_activado','stop_BE','estado','P&L_cerrado_USDT','ROI_margen','tramo','fracción_inicial','precio_salida','P&L_tramo_USDT','fecha_tramo','base_cálculo','remanente','P&L_registro_original','diferencia_original']];
     for(const signal of auditData.rows)for(const [key,s] of Object.keys(auditNames).map(key=>[key,signal.scenarios[key]]))for(const leg of s.legs.length?s.legs:[{}])
-      rows.push([signal.signal_id,key,s.symbol,s.direction,s.received_at,s.margin_used,s.leverage,s.entry_price,s.original_stop,s.be_activated,s.be_stop_price,
+      rows.push([signal.signal_id,key,s.symbol,s.direction,s.received_at,s.margin_used,s.risk_usdt,s.leverage,s.entry_price,s.original_stop,s.be_activated,s.be_stop_price,
         s.closed?s.close_reason:'OPEN',s.pnl_usdt,s.roi_pct,leg.kind,leg.fraction,leg.price,leg.pnl_usdt,leg.at,leg.basis,s.remaining_fraction,signal.recorded_pnl_usdt,signal.reconciliation_difference_usdt]);
     content='\ufeff'+rows.map(row=>row.map(quote).join(';')).join('\r\n');type='text/csv;charset=utf-8';
   }

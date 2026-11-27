@@ -71,7 +71,7 @@ class AuditApiTests(unittest.TestCase):
                 "margin_used": Decimal("20"), "be_activated_at": T0 + timedelta(minutes=1),
                 "telegram_status": "delivered"}
         payload = {"entry": 100, "leverage": 20, "direction": "LONG",
-                   "symbol": "BTCUSD.P", "timeframe": "15M"}
+                   "symbol": "BTCUSD.P", "timeframe": "15M", "stopLoss":{"price":98}}
         rows = [dict(base, id=1, event_type="entry", payload=payload,
                      received_at=T0, applied_at=T0),
                 dict(base, id=2, event_type="tp1", payload={"price": 101},
@@ -91,7 +91,7 @@ class AuditApiTests(unittest.TestCase):
         # Cambiar de modo reutiliza la lectura reciente en vez de repetir la consulta completa.
         self.assertEqual(other_mode.status_code, 200)
         self.assertEqual(database.call_count, 1)
-        self.assertEqual(accepted.json["rows"][0]["pnl_usdt"], 20.0)
+        self.assertEqual(accepted.json["rows"][0]["pnl_usdt"], 50.0)
         self.assertTrue(accepted.json["rows"][0]["be_activated"])
         self.assertFalse(accepted.json["rows"][0]["be_fill_verified"])
         self.assertEqual(accepted.json["summary"]["inferred"], 1)

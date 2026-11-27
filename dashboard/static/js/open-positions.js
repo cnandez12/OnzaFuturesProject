@@ -195,6 +195,11 @@ function renderOpen() {
           <span class="pos-data-val" style="font-size:11px">${fmtP(tp1Val)} / ${fmtP(tp2Val)} / ${fmtP(tp3Val)}</span>
         </div>
         <div class="pos-data-row">
+          <span class="pos-data-key">Riesgo al SL original</span>
+          <span class="pos-data-val">$${Number(p.risk_usdt||250).toFixed(2)}</span>
+        </div>
+        <div class="pos-data-row"><span class="pos-data-key">Margen teórico</span><span class="pos-data-val">$${Number(p.margin_used).toFixed(2)}</span></div>
+        <div class="pos-data-row">
           <span class="pos-data-key">Nominal simulado</span>
           <span class="pos-data-val">$${notional.toFixed(0)} (${entry>0?((notional/entry).toFixed(4)):'—'} ctts)</span>
         </div>

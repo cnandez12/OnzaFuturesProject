@@ -14,7 +14,7 @@ def events(*kinds, direction="LONG"):
         levels = {"tp1": 99, "tp2": 98, "tp3": 97, "sl": 102, "close": 101}
     out = [{"id": 1, "typeSignal": "entry", "received_at": T0,
             "payload": {"entry": entry, "leverage": 20, "direction": direction,
-                        "symbol": "BTCUSD.P", "timeframe": "15M"}}]
+                        "symbol": "BTCUSD.P", "timeframe": "15M", "stopLoss":{"price":98 if direction=="LONG" else 102}}}]
     for index, kind in enumerate(kinds, 2):
         out.append({"id": index, "typeSignal": kind,
                     "received_at": T0 + timedelta(minutes=index),

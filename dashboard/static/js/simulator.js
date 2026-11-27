@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function runSimulator() {
   if (!trades.length) { set('sim-data-notice', 'Sin historial cargado para simular.'); return; }
   const b0         = parseFloat(el('sim-balance').value)    || CFG.balance0;
-  const marginBase = parseFloat(el('sim-margin').value)     || CFG.margin;
+  const riskBase = parseFloat(el('sim-margin').value)     || CFG.margin;
   const leverage   = parseInt(el('sim-leverage').value)     || CFG.leverage;
   const period     = el('sim-period').value;
   const compound   = el('sim-compounding').value;
@@ -144,22 +144,15 @@ function runSimulator() {
     while (active.length && active[0].closedAt <= timestamp && !bankrupt) {
       const pos = active.shift();
       reserved -= pos.margin;
-      const gross = pos.margin * leverage * pos.scenario.rate;
+      const gross = Math.round(pos.margin * leverage * pos.scenario.rate * 100) / 100;
       const exitFee = feesOn ? pos.margin * leverage * pos.scenario.exitFactor * feePct : 0;
       totalFees += exitFee;
       const pnlUsdt = gross - pos.entryFee - exitFee;
       const pnlPct = pnlUsdt / pos.margin * 100;
       balance += gross - exitFee; // entry fee was charged on opening
       evaluated++;
-      if (balance <= 0) {
-        balance = 0;
-        maxDd = 100;
-        bankrupt = true;
-        bankruptDate = pos.t.closed_at;
-      } else {
-        peak = Math.max(peak, balance);
-        maxDd = Math.max(maxDd, (peak - balance) / peak * 100);
-      }
+      peak = Math.max(peak, balance);
+      maxDd = Math.max(maxDd, (peak - balance) / peak * 100);
       if (pnlUsdt > 0) {
         wins++; totalWinPct += pnlPct; curStreak++;
         maxStreak = Math.max(maxStreak, curStreak);
@@ -186,9 +179,11 @@ function runSimulator() {
     if (active.length >= maxPos) { missed++; continue; }
     const scenario = tradeScenario(t, weights);
     if (!scenario) { unpriced++; continue; }
-    const margin = compound === 'pct' ? balance * pctRisk : marginBase;
+    const risk = compound === 'pct' ? balance * pctRisk : riskBase;
+    const entry=Number(t.entry_price),stop=Number(t.stop_loss),distance=Math.abs(entry-stop);
+    const margin = risk*entry/(distance*leverage);
     const entryFee = feesOn ? margin * leverage * feePct : 0;
-    if (!(margin > 0) || margin + entryFee > balance - reserved + 1e-8) { missed++; continue; }
+    if (!(margin > 0) || !Number.isFinite(margin) || !(distance>0)) { missed++; continue; }
     if (scenario.discrepancy !== null && Math.abs(scenario.discrepancy) > 0.01) unreconciled++;
     if (scenario.estimatedFills > 0) estimatedFillTrades++;
     balance -= entryFee;
@@ -201,7 +196,7 @@ function runSimulator() {
   }
   if (!bankrupt) settleThrough(Infinity);
   const simNotice = el('sim-data-notice');
-  if (simNotice) simNotice.textContent = [
+  if (simNotice) simNotice.textContent = ['Escenarios independientes: no se omiten entradas por falta de capital o margen.',
     unreconciled ? `${unreconciled} cierres con diferencia entre precios parciales y P&L guardado; se respeta el P&L registrado.` : '',
     unpriced ? `${unpriced} operaciones sin precios/fechas suficientes para recalcular.` : '',
     estimatedFillTrades ? `${estimatedFillTrades} operaciones usan objetivos TP por faltar algún precio de venta guardado.` : '',
