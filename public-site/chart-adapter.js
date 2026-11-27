@@ -40,7 +40,7 @@ async function fetchJson(path){
 let publicChartQueue=Promise.resolve(),publicChartStarted=false,publicChartGeneration=0;
 let publicFocusedSignal=null;
 function publicFittingInterval(row,interval,now=Date.now()){
- if(!publicPricesVisible(row))return interval;
+ if(!publicPricesVisible(row)||!row.closed)return interval;
  const duration=((row.closed_at?Date.parse(row.closed_at):now)-Date.parse(row.received_at));
  const steps=[['1m',60000],['5m',300000],['15m',900000],['30m',1800000],['1h',3600000],['4h',14400000],['1d',86400000]];
  const requested=steps.find(([iv])=>iv===interval);
@@ -89,7 +89,7 @@ function openOriginalChart(row,focus=false){
   if(first||fbState.symbol!==pair(row.symbol)||focus){
    if(!publicChartStarted){await initFBChart();publicChartStarted=true;}
    if(generation!==publicChartGeneration)return;
-   if(fbState.symbol!==pair(row.symbol)||focus)await fbOpenSymbol(pair(row.symbol));
+   if(fbState.symbol!==pair(row.symbol)||focus)await fbOpenSymbol(pair(row.symbol),row.timeframe);
    if(generation!==publicChartGeneration)return;
    await fbLoadSignals();
    centerPublicChart();
@@ -97,7 +97,7 @@ function openOriginalChart(row,focus=false){
   if(generation!==publicChartGeneration)return;
   fbCandles.applyOptions({autoscaleInfoProvider:original=>publicFocusPriceRange(original(),row)});
   document.getElementById('chart-status').textContent=fbState._historyError || (!publicChartCovered(row)
-   ?'No se pudieron cargar las velas del recorrido completo. Pulsa Centrar operación para reintentar.' : fbState.data.length
+   ?(row.closed?'No se pudieron cargar las velas del recorrido completo. Pulsa Centrar operación para reintentar.':'Vista reciente en la temporalidad seleccionada; la entrada está fuera del rango de velas disponible.') : fbState.data.length
    ?(publicPricesVisible(row)?'Operación centrada · velas '+(fbState.marketSource==='BINANCE'?'Binance Futures (respaldo)':'Bitunix')+' · hora Colombia. '+(fbState._publicFrameNotice||''):'Vista de mercado · los niveles y marcadores de esta señal activa están reservados. Abre la app para consultar la señal completa.')
    :'No hay velas disponibles para este activo. Selecciona otro símbolo o temporalidad.');
  });

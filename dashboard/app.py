@@ -279,6 +279,7 @@ def api_open():
     rows = query(
         """
         SELECT message_id AS id, pair, side AS direction, source_exchange,
+               (SELECT split_part(s.signal_id,'_',2) FROM tv_signals s WHERE s.id=message_id) AS timeframe,
                display_margin_used AS margin_used, leverage,
                entry, stop_loss, tp1, tp2, tp3,
                tp1_filled, tp2_filled, tp3_filled, date,

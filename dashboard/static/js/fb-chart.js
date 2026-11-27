@@ -22,9 +22,9 @@ function fbCurrentExchange() {
   return 'BITUNIX';
 }
 
-/* Abre el Chart para un símbolo dado, SIEMPRE en M15.
+/* Abre el Chart para un símbolo dado, en la temporalidad de la señal cuando se conoce.
    Lo llaman las tarjetas de la pestaña Símbolos y las de En vivo. */
-async function fbOpenSymbol(symbol) {
+async function fbOpenSymbol(symbol, timeframe) {
   const raw = (symbol || '').replace('/', '').toUpperCase();
   if (!raw) return;
 
@@ -38,9 +38,10 @@ async function fbOpenSymbol(symbol) {
 
   await initFBChart();   // idempotente: si ya está, solo redimensiona
 
-  // Forzar M15
-  fbState.tf = '15';
-  fbState.interval = '15m';
+  // Respetar la temporalidad de origen de la señal
+  const target=fbIntervalForTF(timeframe)||'15m';
+  fbState.tf = target;
+  fbState.interval = FB_TF_MS[target]?target:'15m';
 
   // Seleccionar símbolo en el dropdown (lo agrega a la lista si no estaba)
   if (!(fbState.pairs||[]).some(p => p.raw === raw)) {
@@ -54,10 +55,10 @@ async function fbOpenSymbol(symbol) {
   fbBuildSymbolDropdown();
 
   // Marcar el botón 15m activo + leyenda
-  document.querySelectorAll('#chartTfGroup .ct-tf').forEach(b => b.classList.toggle('active', b.dataset.iv === '15m'));
-  const tfBtn = document.querySelector('#chartTfGroup .ct-tf[data-iv="15m"]');
+  document.querySelectorAll('#chartTfGroup .ct-tf').forEach(b => b.classList.toggle('active', b.dataset.iv === fbState.interval));
+  const tfBtn = document.querySelector(`#chartTfGroup .ct-tf[data-iv="${fbState.interval}"]`);
   const clTf = document.getElementById('clTf');
-  if (clTf) clTf.textContent = tfBtn ? `· ${tfBtn.textContent}` : '· 15m';
+  if (clTf) clTf.textContent = tfBtn ? `· ${tfBtn.textContent}` : '· '+fbState.interval;
 
   await fbReload();
 }
@@ -402,7 +403,7 @@ function fbRender() {
   else if (lastPrice < 10)    { prec=4; minMv=0.0001; }
   else if (lastPrice < 1000)  { prec=3; minMv=0.001; }
   fbCandles.applyOptions({ priceFormat:{type:'price', precision:prec, minMove:minMv},
-    autoscaleInfoProvider:original=>fbFlatPriceRange(original(),[...(fbState.signals.open||[])].sort((a,b)=>Date.parse(b.opened_at)-Date.parse(a.opened_at)||Number(b.id)-Number(a.id)).slice(0,1)) });
+    autoscaleInfoProvider:original=>fbFlatPriceRange(original(),[...(fbState.signals.open||[])].filter(s=>!s.timeframe||fbIntervalForTF(s.timeframe)===fbState.interval).sort((a,b)=>Date.parse(b.opened_at)-Date.parse(a.opened_at)||Number(b.id)-Number(a.id)).slice(0,1)) });
 
   fbBuildSeriesData();
   fbChart.timeScale().fitContent();
@@ -701,6 +702,7 @@ async function fbLoadSignals() {
 }
 
 function fbClearSignals() {
+  fbProjectionScope('');
   fbStopZoneSync();
   fbState.priceLines.forEach(l => { try{fbCandles.removePriceLine(l);}catch(e){} });
   fbState.priceLines = [];
@@ -730,6 +732,19 @@ function fbFindTPHitCandle(tpPrice, afterTime, beforeTime, isLong) {
   return null;
 }
 
+function fbProjectionScope(message) {
+  const container=document.getElementById('fb-chart-container');if(!container)return;
+  let badge=document.getElementById('fb-projection-scope');
+  if(!badge){badge=document.createElement('div');badge.id='fb-projection-scope';
+    badge.style.cssText='position:absolute;left:12px;bottom:62px;max-width:calc(100% - 95px);z-index:32;padding:5px 8px;border-radius:5px;background:#08131ee8;color:#b9d8ed;font:11px/1.4 sans-serif;pointer-events:none;';container.appendChild(badge);}
+  badge.textContent=message;badge.style.display=message?'block':'none';
+}
+
+function fbIntervalForTF(value) {
+  let tf=String(value||'').toLowerCase();if(/^\d+$/.test(tf))tf+='m';
+  return ({'60m':'1h','240m':'4h','1440m':'1d','d':'1d'})[tf]||tf;
+}
+
 function fbDrawSignals() {
   fbClearSignals();
 
@@ -737,8 +752,12 @@ function fbDrawSignals() {
   const closed = (fbState.signals.closed||[]).map(s=>({...s, _open:false}));
   const open   = (fbState.signals.open||[]).map(s=>({...s, _open:true}));
   // One projection per chart. Older open records retain their true ledger status.
-  const latestOpen=[...open].sort((a,b)=>Date.parse(b.opened_at)-Date.parse(a.opened_at)||Number(b.id)-Number(a.id))[0];
-  const merged = [...closed, ...open];
+  const matchingOpen=open.filter(s=>!s.timeframe||fbIntervalForTF(s.timeframe)===fbState.interval);
+  const latestOpen=[...matchingOpen].sort((a,b)=>Date.parse(b.opened_at)-Date.parse(a.opened_at)||Number(b.id)-Number(a.id))[0];
+  const merged = [...closed, ...matchingOpen];
+  const frames=[...new Set(open.map(s=>s.timeframe).filter(Boolean))];
+  fbProjectionScope(latestOpen?`Proyección activa: ${latestOpen.direction} · ${latestOpen.timeframe||fbState.interval}`
+    :open.length?`Sin señal abierta de ${fbState.interval}. Temporalidades con señales: ${frames.join(', ')}.`:'');
 
   const seen = new Set();
   const all = merged.filter(s => {
@@ -1268,7 +1287,7 @@ function fbOpenNetPct(sig, mark) {
 
 function fbUpdateDeltaPnl() {
   const open = (fbState.signals && fbState.signals.open) || [];
-  const sig  = [...open].sort((a,b)=>Date.parse(b.opened_at)-Date.parse(a.opened_at)||Number(b.id)-Number(a.id))[0];
+  const sig  = open.filter(s=>!s.timeframe||fbIntervalForTF(s.timeframe)===fbState.interval).sort((a,b)=>Date.parse(b.opened_at)-Date.parse(a.opened_at)||Number(b.id)-Number(a.id))[0];
   if (!sig || !fbState.data.length || !fbCandles) { fbState._dpnl = null; fbPositionDeltaPnl(); return; }
 
   const lastBar = fbState.data[fbState.data.length-1];

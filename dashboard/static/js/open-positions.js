@@ -141,7 +141,7 @@ function renderOpen() {
     const dt      = p.date ? new Date(p.date).toLocaleString('es',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
     const pairSafe = esc(p.pair || p.symbol || '');
 
-    return `<div class="pos-card" id="pos-${Number(p.id)}" data-pair="${pairSafe}" onclick="fbOpenSymbol(this.dataset.pair)" style="cursor:pointer" title="Ver ${pairSafe} en el chart (M15)">
+    return `<div class="pos-card" id="pos-${Number(p.id)}" data-pair="${pairSafe}" data-timeframe="${esc(p.timeframe||'15m')}" onclick="fbOpenSymbol(this.dataset.pair,this.dataset.timeframe)" style="cursor:pointer" title="Ver ${pairSafe} en su temporalidad">
       <div class="pos-card-accent" style="background:${col}"></div>
       <div class="pos-header">
         <div>
