@@ -1080,6 +1080,7 @@ function fbStopCountdown() {
   fbState._dpnl = null;
   const de = document.getElementById('fb-delta-pnl');
   if (de) de.style.display = 'none';
+  const tag=document.getElementById('fb-countdown');if(tag)tag.style.display='none';
 }
 
 function fbTickCountdown() {
@@ -1199,6 +1200,8 @@ async function fbReload() {
   if(fbState.pollRef)clearInterval(fbState.pollRef);
   fbState.data=[];
   fbState.signals={closed:[],open:[]};
+  for(const id of ['clO','clH','clL','clC','clChg']){const node=document.getElementById(id);if(node)node.textContent='—';}
+  const legendSymbol=document.getElementById('clSym');if(legendSymbol)legendSymbol.textContent=fbState.symbol;
   if(fbCandles)fbCandles.setData([]);
   if(fbVolume)fbVolume.setData([]);
   fbClearSignals();
