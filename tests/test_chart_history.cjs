@@ -33,6 +33,14 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
  context.fbState.symbol='NEWUSDT';context.fetch=async()=>({ok:true,json:async()=>[{...row,close:'11'},{...row,time:row.time-900000}]});
  await vm.runInContext('fbLoadData()',context);release({ok:true,json:async()=>[row]});await old;
  assert.equal(context.fbState.data.length,2);assert.equal(nodes.clSym.textContent,'NEWUSDT');
+ if(path.startsWith('public')){
+  context.publicFocusedSignal={symbol:'NEWUSDT',closed:true,closed_at:new Date().toISOString()};
+  context.pair=s=>s;context.publicFittingInterval=(r,iv)=>iv;
+  context.fetch=async()=>({ok:true,json:async()=>[row,{...row,time:row.time-900000}]});
+  const before=sockets;await vm.runInContext('fbLoadData()',context);
+  assert.equal(context.fbState.viewHistorical,true);assert.equal(sockets,before,'historical chart must not append current websocket candles');
+  context.publicFocusedSignal=null;
+ }
  context.fetch=async url=>url.startsWith('https://fapi.binance.com/fapi/v1/exchangeInfo')
   ?{ok:true,json:async()=>({symbols:[{symbol:'EPICUSDT',contractType:'PERPETUAL',quoteAsset:'USDT',marginAsset:'USDT',status:'SETTLING'}]})}
   :url.startsWith('https://fapi.binance.com/fapi/v1/klines')?{ok:true,json:async()=>[[1000,'10','11','9','10','5',2000,'50']]}

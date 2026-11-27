@@ -58,6 +58,7 @@ function publicFocusRange(row,candles,interval='15m'){
  return {from:Math.max(-10,anchor-left),to:end+right};
 }
 function publicFocusPriceRange(base,row){
+ base=fbFlatPriceRange(base);
  if(!base)return base;
  if(!publicPricesVisible(row))return base;
  const levels=[row.entry_price,row.original_stop,...(row.targets||[])].filter(v=>Number.isFinite(v)&&v>0);

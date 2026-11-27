@@ -341,6 +341,7 @@ async function fbLoadData() {
   // Historical selections need candles around their own closure, even on M1.
   const now = focus?.closed_at && pair(focus.symbol)===fbState.symbol
     ? Math.min(Date.now(),Date.parse(focus.closed_at)+Math.max(3*3600000,ms*70)) : Date.now();
+  fbState.viewHistorical=!!focus?.closed;
   fbState._historyError='';fbSetLive(false);fbChartSource(null);fbHistoryNotice('Cargando velas de '+symbol+'…');
   const chunkSize=FB_CHUNK,chunks=Math.ceil(FB_CANDLES/chunkSize);
   const globalStart=now-FB_CANDLES*ms;
@@ -386,9 +387,23 @@ async function fbLoadData() {
       : 'No se pudo cargar el historial de '+symbol+'. Reintenta la consulta o selecciona otro activo.';
     fbHistoryNotice(fbState._historyError,true);return;
   }
-  fbRender();fbHistoryNotice(failures?'Historial parcial: algunos tramos no pudieron cargarse.': '',!!failures);
-  if(source==='BINANCE')fbStartBinanceUpdates();else fbConnectWS();
-  fbStartSignalPoll();fbStartCountdown();fbUpdateLegend();
+  fbRender();
+  const inactive=source==='BINANCE'&&fbState.marketStatus!=='TRADING';
+  fbHistoryNotice(inactive?symbol+': Binance informa contrato sin negociación activa. Se muestran velas de referencia; no hay cotización en vivo.'
+    :failures?'Historial parcial: algunos tramos no pudieron cargarse.':'',!!failures);
+  if(!fbState.viewHistorical&&!inactive){
+    if(source==='BINANCE')fbStartBinanceUpdates();else fbConnectWS();
+    fbStartCountdown();
+  }else fbSetLive(false);
+  fbStartSignalPoll();fbUpdateLegend();
+}
+
+function fbFlatPriceRange(base, signals=[]) {
+  if(!base||!fbState.data.length)return base;
+  const price=fbState.data.at(-1).close;
+  if(base.priceRange.maxValue-base.priceRange.minValue>=price*.0001)return base;
+  const levels=signals.flatMap(s=>[s.entry_price,s.entry,s.current_sl,s.stop_loss,s.tp1,s.tp2,s.tp3]).map(Number).filter(v=>Number.isFinite(v)&&v>0);
+  return {...base,priceRange:{minValue:Math.min(price*.99,...levels),maxValue:Math.max(price*1.01,...levels)}};
 }
 
 function fbRender() {
@@ -563,7 +578,7 @@ function fbStartBinanceUpdates() {
 }
 
 function fbConnectWS() {
-  if(fbState.marketSource==='BINANCE')return;
+  if(fbState.marketSource==='BINANCE'||fbState.viewHistorical)return;
   fbDisconnectWS(true);
   fbState.reconnect = true;
   const sock = new WebSocket(FB_WS);   // referencia local → guard de identidad
@@ -658,13 +673,14 @@ function fbDisconnectWS(keepReconnect) {
   if(fbState.ws){fbState.ws.close();fbState.ws=null;}
 }
 function fbSetLive(on) {
-  const el = document.getElementById('chartLive');
-  if (!el) return;
-  el.querySelector('span:last-child').textContent = on?'LIVE':'OFF';
-  el.style.background = on?'rgba(55,244,176,0.08)':'rgba(255,84,112,0.08)';
-  el.style.borderColor = on?'rgba(55,244,176,0.15)':'rgba(255,84,112,0.15)';
-  const dot = el.querySelector('span:first-child');
-  dot.style.background = on?'var(--green)':'var(--red)';
+  const el=document.getElementById('chartLive');if(!el)return;
+  const inactive=fbState.marketSource==='BINANCE'&&fbState.marketStatus&& !['TRADING','UNKNOWN'].includes(fbState.marketStatus);
+  const historical=!!fbState.viewHistorical;
+  const label=inactive?'SIN NEGOCIACIÓN':historical?'HISTÓRICO':on?'LIVE':'SIN CONEXIÓN';
+  const color=inactive||historical?'#ffd166':on?'#37f4b0':'#ff5470';
+  el.querySelector('span:last-child').textContent=label;
+  el.style.background=color+'14';el.style.borderColor=color+'40';
+  el.querySelector('span:first-child').style.background=color;
 }
 
 /* ── Signals polling ── */
