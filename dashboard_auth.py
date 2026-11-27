@@ -1,9 +1,7 @@
-"""Contraseña del panel interno y de sus APIs (HTTP Basic).
+"""Acceso público de consulta a CryptoPilot; autenticación para otras operaciones.
 
-El panel muestra entrada, stop y objetivos de las señales activas. Sin
-DASHBOARD_TOKEN queda bloqueado: nunca se sirve abierto por omisión.
-El sitio público, su API de solo lectura, el webhook de TradingView (que
-valida su propia clave) y las rutas de salud no pasan por esta contraseña.
+El hostname del dashboard expone sus páginas y APIs de lectura por decisión
+explícita del propietario. El webhook conserva su autenticación independiente.
 """
 
 from __future__ import annotations
@@ -17,11 +15,17 @@ OPEN_PATHS = frozenset({
     "/health", "/health/vorza", "/health/telegram", "/webhook/tradingview",
 })
 OPEN_PREFIXES = ("/api/public/",)
+PUBLIC_DASHBOARD_HOSTS = frozenset({"cryptopilotai.up.railway.app"})
+READ_ONLY_PREFIXES = ("/static/", "/api/sim/", "/api/chart/", "/api/audit/", "/api/bitunix/")
 
 
 def install_dashboard_auth(app):
     @app.before_request
     def require_dashboard_password():
+        host = request.host.partition(":")[0].lower()
+        if (host in PUBLIC_DASHBOARD_HOSTS and request.method in {"GET", "HEAD"}
+                and (request.path == "/" or request.path.startswith(READ_ONLY_PREFIXES))):
+            return None
         if (request.path in OPEN_PATHS or request.path.startswith(OPEN_PREFIXES)
                 or request.method == "OPTIONS"):
             return None
@@ -36,6 +40,6 @@ def install_dashboard_auth(app):
         if hmac.compare_digest(supplied.encode("utf-8"), expected.encode("utf-8")):
             return None
         return Response("Acceso restringido", 401, {
-            "WWW-Authenticate": 'Basic realm="Onza Futures", charset="UTF-8"',
+            "WWW-Authenticate": 'Basic realm="CryptoPilot AI", charset="UTF-8"',
             "Cache-Control": "no-store",
         })

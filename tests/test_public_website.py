@@ -41,7 +41,17 @@ class PublicWebsiteTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertNotIn('WWW-Authenticate', response.headers)
             self.assertEqual(self.get('/api/sim/open', base_url=public).status_code, 404)
-            self.assertEqual(self.get('/', base_url='https://cryptopilotai.up.railway.app').status_code, 401)
+            self.assertEqual(self.get('/', base_url='https://cryptopilotai.up.railway.app').status_code, 200)
+
+    def test_dashboard_is_public_for_reading_only_on_its_explicit_hostname(self):
+        host = 'https://cryptopilotai.up.railway.app'
+        with patch.dict('os.environ', {'DASHBOARD_TOKEN': ''}):
+            for path in ('/', '/static/cryptopilot-logo.png', '/static/js/api.js'):
+                response = self.get(path, base_url=host)
+                self.assertEqual(response.status_code, 200)
+                self.assertNotIn('WWW-Authenticate', response.headers)
+        self.assertEqual(self.client.post('/api/sim/open', base_url=host).status_code, 401)
+        self.assertEqual(self.get('/', base_url='https://cryptopilotai.up.railway.app.attacker.example').status_code, 401)
 
     def test_only_public_assets_are_served(self):
         for path in ('/app.js', '/onza-logo.png', '/vendor/lightweight-charts.js'):
