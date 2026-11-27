@@ -641,16 +641,12 @@ function fbDrawSignals() {
     if (isOpen && fbState.data.length) tC = fbState.data[fbState.data.length-1].time+(FB_TF_MS[fbState.interval]/1000)*8;
     if (!tC) tC = tO+86400;
 
-    // Snap tO to nearest candle time (timeToCoordinate requires exact data times)
-    let anchorCandle = null;
-    if (fbState.data.length) {
-      let bestT = fbState.data[0].time, bestC = fbState.data[0];
-      for (const cd of fbState.data) {
-        if (Math.abs(cd.time - tO) < Math.abs(bestT - tO)) { bestT = cd.time; bestC = cd; }
-        if (cd.time > tO + 300) break;
-      }
-      tO = bestT; anchorCandle = bestC;
-    }
+    // Use the candle containing the event, never the nearest future candle.
+    // Keep out-of-window entries out of view; their closure may still be visible.
+    const candleAt = time => fbState.data.find(cd =>
+      cd.time <= time && time < cd.time + (FB_TF_MS[fbState.interval] / 1000));
+    const anchorCandle = candleAt(tO);
+    if (anchorCandle) tO = anchorCandle.time;
 
     // ROI% calculator (with leverage)
     const roi = (t)=> ((Math.abs(t-entry)/entry)*100*Number(sig.leverage || CFG.leverage)).toFixed(2);
@@ -659,8 +655,8 @@ function fbDrawSignals() {
     // SELL se sienta SOBRE la vela (ancla = high); BUY DEBAJO (ancla = low).
     // Se dibuja en el overlay y se reposiciona cada frame → nunca se despega.
     const anchorPrice = anchorCandle ? (isL ? anchorCandle.low : anchorCandle.high) : entry;
-    zones.push({ type:'sigtag', time:tO, price:anchorPrice, isLong:isL,
-                 text: isL ? '▲▲ BUY' : '▼▼ SELL' });
+    if (anchorCandle) zones.push({ type:'sigtag', time:tO, price:anchorPrice, isLong:isL,
+                 text: isL ? '▲ BUY · Entrada LONG' : '▼ SELL · Entrada SHORT' });
 
     // ══════════════════════════════════════════════════════════════════
     //  SEÑAL ABIERTA (EN EJECUCIÓN) — proyección completa de zonas.
@@ -731,35 +727,25 @@ function fbDrawSignals() {
       const bestTP = sig.hit_tp3 ? {n:3, val:tp3} :
                      sig.hit_tp2 ? {n:2, val:tp2} :
                      sig.hit_tp1 ? {n:1, val:tp1} : null;
-      const wasSL = sl > 0 && (sig.close_reason === 'SL' || sig.close_reason === 'SL_FORCED');
 
-      // Anclaje: vela donde tocó su mejor TP; si no hubo TP, donde tocó el SL; si no, tC
-      let anchorPrice, anchorTime;
-      if (bestTP && bestTP.val > 0) {
-        let searchAfter = tO;
-        if (bestTP.n >= 2 && tp1 > 0) { const t1c = fbFindTPHitCandle(tp1, searchAfter, tC, isL); if (t1c) searchAfter = t1c; }
-        if (bestTP.n >= 3 && tp2 > 0) { const t2c = fbFindTPHitCandle(tp2, searchAfter, tC, isL); if (t2c) searchAfter = t2c; }
-        anchorPrice = bestTP.val;
-        anchorTime  = fbFindTPHitCandle(bestTP.val, searchAfter, tC, isL) || tC;
-      } else if (wasSL) {
-        anchorPrice = sl;
-        anchorTime  = fbFindTPHitCandle(sl, tO, tC, !isL) || tC;
-      } else {
-        anchorPrice = entry;
-        anchorTime  = tC;
-      }
+      // A final result belongs to the recorded closure, not the earlier TP.
+      // BE_INFERRED is a presentation assumption, not an observed entry-price fill.
+      const closeCandle = candleAt(tC);
+      if (!closeCandle) continue;
+      const anchorTime = closeCandle.time;
+      const anchorPrice = Number(sig.exit_price) || entry;
 
       // Texto: P&L real de la BD (fallback al ROI calculado si el campo faltara)
       const isWin  = realPct !== null ? (realPct >= 0) : !!bestTP;
       const pctTxt = realPct !== null
         ? `${realPct >= 0 ? '+' : ''}${realPct.toFixed(2)}% ROI`
-        : (bestTP ? `+${roi(bestTP.val)}% ROI` : `-${roi(sl)}% ROI`);
+        : 'Resultado no disponible';
       const accent = isWin ? (bestTP && bestTP.n === 3 ? '#FFD166' : '#37F4B0') : '#FF5470';
       const icon   = isWin ? (bestTP && bestTP.n === 3 ? '★' : '✓') : '⨯';
 
       zones.push({type:'tplbl', time: anchorTime, price: anchorPrice, dot:true,
         icon: icon, accent: accent,
-        line1: scenario,
+        line1: `Cierre ${isL ? 'LONG' : 'SHORT'} · ${scenario}${sig.close_reason === 'BE_INFERRED' ? ' (inferido)' : ''}`,
         line2: pctTxt});
     }
   }
@@ -931,7 +917,7 @@ function fbSyncZones() {
       }
       el.style.display='flex';
       // Pill a la izquierda del ancla (sin clamp). translate(-100%) lo coloca a la izq.
-      el.style.left=(x-8)+'px'; el.style.top=y+'px';
+      el.style.left=(x-8)+'px'; el.style.top=(y+28)+'px';
       if (z._dot) {
         z._dot.style.display='block';
         z._dot.style.left=x+'px'; z._dot.style.top=y+'px';
