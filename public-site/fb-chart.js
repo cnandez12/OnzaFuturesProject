@@ -686,7 +686,7 @@ function fbDrawSignals() {
     // Se dibuja en el overlay y se reposiciona cada frame → nunca se despega.
     const anchorPrice = anchorCandle ? (isL ? anchorCandle.low : anchorCandle.high) : entry;
     if (anchorCandle) zones.push({ type:'sigtag', time:tO, price:anchorPrice, isLong:isL,
-                 text: isL ? '▲ BUY · Entrada LONG' : '▼ SELL · Entrada SHORT' });
+                 text: isL ? '▲ BUY · LONG' : '▼ SELL · SHORT' });
 
     // ══════════════════════════════════════════════════════════════════
     //  SEÑAL ABIERTA (EN EJECUCIÓN) — proyección completa de zonas.
