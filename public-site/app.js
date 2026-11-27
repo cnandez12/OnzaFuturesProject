@@ -26,13 +26,13 @@ function drawEquity(points,capital){const chart=$('equity');chart.replaceChildre
  if(points.length>1)chart.append(svg('text',{x:Math.min(x(points.length-1),950),y:Math.max(18,y(points[points.length-1])-12),fill:'#43ddf1','font-size':13,'text-anchor':'end'},pct(points[points.length-1])));
  if(points.length===1)chart.append(svg('text',{x:420,y:115,fill:'#98adc3','font-size':13},'Sin cierres en la selección'));
 }
-function featuredRows(){if(!data)return [];const ids=data.featured_signal_ids||data.signals.filter(r=>!r.closed&&publicPricesVisible(r)).map(r=>r.signal_id).slice(0,4);return ids.map(id=>data.signals.find(r=>r.signal_id===id)).filter(Boolean);}
+function featuredRows(){if(!data)return [];const ids=data.featured_signal_ids||data.signals.filter(r=>!r.closed&&publicPricesVisible(r)).map(r=>r.signal_id).slice(0,4);return ids.map(id=>data.signals.find(r=>r.signal_id===id)).filter(r=>r&&r.live_eligible!==false);}
 function livePerformance(r,mark){
  if(!publicPricesVisible(r)||r.closed||!Number.isFinite(mark)||mark<=0||!(r.entry_price>0)||!(r.margin_used>0))return null;
  const pnl=(r.recorded_partial_pnl_usdt||0)+(mark-r.entry_price)/r.entry_price*r.leverage*r.margin_used*r.remaining_fraction*(r.direction==='LONG'?1:-1);
  return {pnl_usdt:pnl,roi_pct:pnl/r.margin_used*100,realized_usdt:r.recorded_partial_pnl_usdt||0,floating_usdt:pnl-(r.recorded_partial_pnl_usdt||0)};
 }
-function renderOpen(){if(!data)return;const rows=data.signals.filter(r=>!r.closed),grid=$('open-signals');grid.replaceChildren();$('live-count').textContent=rows.length;
+function renderOpen(){if(!data)return;const rows=data.signals.filter(r=>!r.closed&&r.live_eligible!==false),grid=$('open-signals');grid.replaceChildren();$('live-count').textContent=rows.length;
  const featured=featuredRows(),ids=new Set(featured.map(r=>r.signal_id));
  const ordered=[...featured,...rows.filter(r=>!ids.has(r.signal_id)).sort((a,b)=>b.received_at.localeCompare(a.received_at))];
  const note=$('featured-note');if(note)note.textContent=(data.featured_policy||'Selección de señales destacadas.')+' Se actualiza cada 30 segundos; los indicadores superiores incluyen todo el registro.';
@@ -70,7 +70,7 @@ function renderChart(focus=false,scroll=true){
  selected=r.signal_id;updatePublicChartDetails(r);if(focus&&scroll)$('public-chart-shell').scrollIntoView({behavior:'smooth',block:'start'});openOriginalChart(r,focus).catch(()=>{$('chart-status').textContent='No se pudo cargar el gráfico. Selecciona otra operación o actualiza la página.';});
 }
 async function load(){if(loading)return;loading=true;try{const fresh=await get('/results');data=fresh;$('updated').textContent='Corte: '+date(data.as_of)+' · Colombia';$('methodology').textContent=PUBLIC_RISK_NOTICE;
- $('stat-closed').textContent=data.summary.closed;$('stat-win').textContent=pct(data.summary.win_rate);$('stat-return').textContent=pct(data.return_pct);$('stat-return').className=data.return_pct>=0?'accent':'negative';$('stat-open').textContent=data.summary.open;$('stat-base').textContent='Capital inicial simulado: '+money(data.capital_base);
+ $('stat-closed').textContent=data.summary.closed;$('stat-win').textContent=pct(data.summary.win_rate);$('stat-return').textContent=pct(data.return_pct);$('stat-return').className=data.return_pct>=0?'accent':'negative';$('stat-open').textContent=data.live_counts?.visible_open??data.summary.open;$('stat-base').textContent='Capital inicial simulado: '+money(data.capital_base);
  const first=data.signals.map(r=>r.received_at).sort()[0];$('method-note').textContent=(first?'Registro desde '+date(first)+' · ':'')+'Indicadores del registro completo de operaciones.'+(data.presentation?' Cuenta representada con margen de '+money(data.presentation.margin_per_trade)+' por señal · parciales 40/40/20 con BE.':'');
  const previous=selected;if(!chartPinned&&data.featured_signal_ids?.length)selected=data.featured_signal_ids[0];
  const selector=$('signal-select');selector.replaceChildren();for(const r of data.signals){const option=node('option',cleanSymbol(r.symbol)+' · '+r.direction+' · '+r.timeframe+' · '+date(r.received_at)+(publicPricesVisible(r)?'':' · Niveles reservados'));option.value=r.signal_id;selector.append(option);}if(selected&&data.signals.some(r=>r.signal_id===selected))selector.value=selected;

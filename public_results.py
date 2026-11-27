@@ -1,5 +1,6 @@
 """Public, read-only projection. Internal delivery information never leaves this API."""
 from audit_reporting import AUDIT_SQL, build_report
+from market_visibility import canonical, live_market_states, LIVE_EXCLUDED
 from psycopg2.extras import RealDictCursor
 from datetime import datetime, timezone
 import math
@@ -70,7 +71,9 @@ def open_performance(row,marks):
         return None
 
 
-def select_featured(rows,marks,limit=4):
+def select_featured(rows,marks,limit=4,market_states=None):
+    market_states=market_states or {}
+    rows=[r for r in rows if market_states.get(canonical(r['symbol']),{}).get('visible',canonical(r['symbol']) not in LIVE_EXCLUDED)]
     performance={r['signal_id']:open_performance(r,marks) for r in rows if not r['closed']}
     eligible=[r for r in rows if not r['closed'] and (r['max_tp']>=1 or
               (performance[r['signal_id']] and performance[r['signal_id']]['pnl_usdt']>0))]
@@ -84,12 +87,13 @@ def select_featured(rows,marks,limit=4):
     return active+fallback[:max(0,limit-len(active))],performance
 
 
-def project_public(report, capital, marks=None, quote_as_of=None):
+def project_public(report, capital, marks=None, quote_as_of=None, market_states=None):
+    market_states=market_states or {}
     allowed = ('signal_id','symbol','direction','timeframe','entry_price','original_stop','targets',
                'max_tp','be_activated','be_stop_price','be_activated_at','closed','close_reason',
                'received_at','closed_at','pnl_usdt','roi_pct','recorded_partial_pnl_usdt','legs',
                'remaining_fraction','leverage','margin_used')
-    featured,performance=select_featured(report['rows'],marks or {})
+    featured,performance=select_featured(report['rows'],marks or {},market_states=market_states)
     preview_ids={r['signal_id'] for r in featured if not r['closed']}
     featured_ranks={r['signal_id']:i for i,r in enumerate(featured)}
     sensitive = {'entry_price','original_stop','targets','be_stop_price',
@@ -99,6 +103,7 @@ def project_public(report, capital, marks=None, quote_as_of=None):
     for row in report['rows']:
         visible = row['closed'] or row['signal_id'] in preview_ids
         public_row = {key: row[key] for key in allowed if visible or key not in sensitive}
+        public_row['live_eligible']=market_states.get(canonical(row['symbol']),{}).get('visible',canonical(row['symbol']) not in LIVE_EXCLUDED)
         public_row['prices_visible'] = visible
         public_row['visibility'] = 'history' if row['closed'] else ('preview' if visible else 'protected')
         public_row['featured']=row['signal_id'] in featured_ranks
@@ -114,6 +119,8 @@ def project_public(report, capital, marks=None, quote_as_of=None):
     return {'as_of':report['as_of'], 'method':'Resultados del registro de operaciones',
             'capital_base':capital,'return_pct':round(summary['pnl_usdt']/capital*100,2) if capital>0 else None,
             'summary':summary,'signals':signals,
+            'live_counts':{'visible_open':sum(not r['closed'] and r['live_eligible'] for r in signals),
+                           'hidden_open':sum(not r['closed'] and not r['live_eligible'] for r in signals)},
             'active_preview_limit':4,'price_visibility_version':2,
             'featured_signal_ids':[r['signal_id'] for r in featured],
             'featured_policy':'Selección de destacadas: activas con TP2, TP1 y después rendimiento abierto positivo. Si faltan, se completa con cierres positivos recientes. No representa el registro completo.',
@@ -121,7 +128,7 @@ def project_public(report, capital, marks=None, quote_as_of=None):
             'methodology':'El trading de futuros conlleva un alto nivel de riesgo. El apalancamiento puede amplificar tanto las ganancias como las pérdidas, y puede ocasionar la pérdida del capital invertido. La información presentada tiene fines informativos y no constituye asesoramiento financiero. Los resultados pasados no garantizan resultados futuros. Evalúa tu situación financiera y tolerancia al riesgo antes de operar.', 'risk_disclaimer':'El trading de futuros conlleva un alto nivel de riesgo. El apalancamiento puede amplificar tanto las ganancias como las pérdidas, y puede ocasionar la pérdida del capital invertido. La información presentada tiene fines informativos y no constituye asesoramiento financiero. Los resultados pasados no garantizan resultados futuros. Evalúa tu situación financiera y tolerancia al riesgo antes de operar.'}
 
 
-def load_public(connection, capital, price_loader=None, margin_override=None):
+def load_public(connection, capital, price_loader=None, margin_override=None, status_loader=None):
     conn=connection()
     try:
         conn.set_session(readonly=True,isolation_level='REPEATABLE READ')
@@ -134,7 +141,8 @@ def load_public(connection, capital, price_loader=None, margin_override=None):
     report=build_report(rows,mode='partial_be',margin_override=margin_override)
     loader=price_loader or public_market_marks
     marks,quote_as_of=loader([r['symbol'] for r in report['rows'] if not r['closed']])
-    result=project_public(report,capital,marks,quote_as_of)
+    states=(status_loader or live_market_states)([r['symbol'] for r in report['rows']])
+    result=project_public(report,capital,marks,quote_as_of,market_states=states)
     if margin_override is not None:
         from presentation_config import metadata
         result["presentation"]=metadata()

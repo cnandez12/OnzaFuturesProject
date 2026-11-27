@@ -40,7 +40,7 @@ async function loadAll() {
   try { pulse = { status:'fulfilled', value: await fetchJson('/api/sim/pulse') }; }
   catch (reason) { pulse = { status:'rejected', reason }; }
   const [h, s, o, sym] = await Promise.allSettled([
-    fetchAllHistory(), fetchJson('/api/sim/stats'), fetchJson('/api/sim/open'),
+    fetchAllHistory(), fetchJson('/api/sim/stats'), fetchJson('/api/sim/open?live=1'),
     fetchJson('/api/sim/symbols'),
   ]);
   if (h.status === 'fulfilled') trades = h.value || [];

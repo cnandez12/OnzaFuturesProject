@@ -7,6 +7,7 @@ from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 from datetime import datetime, date
+from market_visibility import canonical, live_market_states
 from dashboard.presentation import project_sql
 from presentation_config import INITIAL_CAPITAL, TRADE_MARGIN, metadata as presentation_metadata
 
@@ -290,7 +291,11 @@ def api_open():
     )
     if rows is None:
         return jsonify({"error": "Database unavailable"}), 503
-    return jsonify(rows_to_list(rows))
+    items = rows_to_list(rows)
+    if request.args.get("live") == "1":
+        states = live_market_states([r["pair"] for r in items])
+        items = [r for r in items if states[canonical(r["pair"])]["visible"]]
+    return jsonify(items)
 
 
 # ── API: curva de balance (puntos para gráfico) ───────────────────────────────
