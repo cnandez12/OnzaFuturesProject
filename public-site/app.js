@@ -1,5 +1,5 @@
 const PUBLIC_RISK_NOTICE = 'El trading de futuros conlleva un alto nivel de riesgo. El apalancamiento puede amplificar tanto las ganancias como las pérdidas, y puede ocasionar la pérdida del capital invertido. La información presentada tiene fines informativos y no constituye asesoramiento financiero. Los resultados pasados no garantizan resultados futuros. Evalúa tu situación financiera y tolerancia al riesgo antes de operar.';
-const API='https://onzafuturesproject-production.up.railway.app/api/public';
+const API='/api/public';
 const $=id=>document.getElementById(id), money=v=>v==null?'—':Number(v).toLocaleString('es-CO',{style:'currency',currency:'USD'}), pct=v=>v==null?'—':Number(v).toLocaleString('es-CO',{maximumFractionDigits:2})+'%', date=v=>new Date(v).toLocaleString('es-CO',{timeZone:'America/Bogota',dateStyle:'medium',timeStyle:'short'});
 let data=null,page=0,selected=null,chartRequest=0,prices={},expanded=false,loading=false,chartPinned=false;
 function node(tag,text,cls){const e=document.createElement(tag);if(text!=null)e.textContent=text;if(cls)e.className=cls;return e;}
