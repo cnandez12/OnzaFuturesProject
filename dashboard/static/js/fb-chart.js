@@ -250,41 +250,77 @@ function fbInitControls() {
   });
 }
 
+function fbHistoryNotice(message, retry=false) {
+  const container=document.getElementById('fb-chart-container');
+  if(!container)return;
+  let notice=document.getElementById('fb-history-status');
+  if(!notice){notice=document.createElement('div');notice.id='fb-history-status';
+    notice.style.cssText='position:absolute;top:55px;left:12px;max-width:calc(100% - 90px);padding:12px 16px;background:#0b192bf2;border:1px solid #33516b;border-radius:8px;color:#eaf6ff;z-index:35;font:12px/1.5 sans-serif;';
+    notice.setAttribute('role','status');container.appendChild(notice);}
+  notice.replaceChildren();notice.style.display=message?'block':'none';
+  if(!message)return;
+  const text=document.createElement('span');text.textContent=message;notice.appendChild(text);
+  if(retry){const button=document.createElement('button');button.type='button';button.textContent='Reintentar';
+    button.style.cssText='margin-left:12px;padding:5px 10px;border:1px solid #3385db;border-radius:5px;background:#142b45;color:#eaf6ff;cursor:pointer;';
+    button.onclick=()=>fbReload();notice.appendChild(button);}
+}
+
+async function fbHistoryChunk(url) {
+  let error;
+  for(let attempt=0;attempt<2;attempt++){
+    try{
+      const response=await fetch(url,{signal:AbortSignal.timeout(10000)});
+      const body=await response.json();
+      if(!response.ok){error=Object.assign(new Error(body.error||'Fallo al consultar velas'),{code:body.code});
+        if(body.code==='market_unavailable')throw error;
+      }else if(Array.isArray(body))return body;
+      else error=new Error('Formato de velas inválido');
+    }catch(exc){error=exc;if(exc.code==='market_unavailable')throw exc;}
+  }
+  throw error||new Error('Historial no disponible');
+}
+
 async function fbLoadData() {
+  const generation=(fbState._dataGeneration||0)+1;fbState._dataGeneration=generation;
+  const symbol=fbState.symbol;
   const iv = fbState.interval;
   const ms = FB_TF_MS[iv];
   if (!ms || !fbState.symbol) return;
 
   const now = Date.now();
-  const chunkSize = FB_CHUNK;
-  const chunks = Math.ceil(FB_CANDLES / chunkSize);
-  const globalStart = now - FB_CANDLES * ms;
-  const reqs = [];
-  for (let i=0; i<chunks; i++) {
-    const st = globalStart + i * chunkSize * ms;
-    const url = `${FB_REST}?symbol=${encodeURIComponent(fbState.symbol)}&interval=${iv}&startTime=${st}&endTime=${st + chunkSize*ms - 1}`;
-    reqs.push(fetch(url).then(r=>r.ok?r.json():[])
-      .then(result => Array.isArray(result) ? result : [])
-      .catch(()=>[]));
+  fbState._historyError='';fbSetLive(false);fbHistoryNotice('Cargando velas de '+symbol+'…');
+  const chunkSize=FB_CHUNK,chunks=Math.ceil(FB_CANDLES/chunkSize);
+  const globalStart=now-FB_CANDLES*ms;
+  const results=[];let failures=0,marketUnavailable=false;
+  for(let i=0;i<chunks;i+=3){
+    if(generation!==fbState._dataGeneration||symbol!==fbState.symbol||iv!==fbState.interval)return;
+    const batch=await Promise.all(Array.from({length:Math.min(3,chunks-i)},async(_,j)=>{
+      const st=globalStart+(i+j)*chunkSize*ms;
+      const url=`${FB_REST}?symbol=${encodeURIComponent(symbol)}&interval=${iv}&startTime=${st}&endTime=${st+chunkSize*ms-1}`;
+      try{return await fbHistoryChunk(url);}catch(error){failures++;marketUnavailable ||= error.code==='market_unavailable';
+        console.warn('Chart history failed',symbol,iv,error.code||error.message);return [];}
+    }));
+    results.push(...batch);if(marketUnavailable)break;
   }
-  const results = await Promise.all(reqs);
-  const all = [];
-  for (const raw of results) for (const k of raw)
-    all.push({time:(Number(k.time)/1000)+(fbState.tzOff*3600),open:+k.open,high:+k.high,low:+k.low,close:+k.close,volume:+k.baseVol});
-
-  const seen = new Set();
-  fbState.data = all.filter(c => { if(seen.has(c.time))return false; seen.add(c.time); return true; })
-    .sort((a,b)=>a.time-b.time);
-
-  fbRender();
-  fbConnectWS();
-  fbStartSignalPoll();
-  fbStartCountdown();
-  fbUpdateLegend();
+  if(generation!==fbState._dataGeneration||symbol!==fbState.symbol||iv!==fbState.interval)return;
+  const all=[];
+  for(const raw of results)for(const k of raw){
+    const c={time:Number(k.time)/1000+fbState.tzOff*3600,open:+k.open,high:+k.high,low:+k.low,close:+k.close,volume:+k.baseVol};
+    if(Object.values(c).every(Number.isFinite)&&c.open>0&&c.close>0&&c.low>0&&c.high>=Math.max(c.open,c.close)&&c.low<=Math.min(c.open,c.close))all.push(c);
+  }
+  const seen=new Set();
+  fbState.data=all.filter(c=>{if(seen.has(c.time))return false;seen.add(c.time);return true;}).sort((a,b)=>a.time-b.time);
+  document.getElementById('clSym').textContent=symbol;
+  const wmSym=document.getElementById('fb-wm-sym');if(wmSym)wmSym.textContent=symbol.replace('USDT',' / USDT');
   fbLoadSymbolStats();
-  document.getElementById('clSym').textContent = fbState.symbol;
-  const wmSym = document.getElementById('fb-wm-sym');
-  if (wmSym) wmSym.textContent = fbState.symbol.replace('USDT',' / USDT');
+  if(fbState.data.length<2){
+    fbState._historyError=marketUnavailable
+      ?'Bitunix no habilita el historial de '+symbol+'. Selecciona otro activo. Las operaciones registradas se conservan.'
+      : 'No se pudo cargar el historial de '+symbol+'. Reintenta la consulta o selecciona otro activo.';
+    fbHistoryNotice(fbState._historyError,true);return;
+  }
+  fbRender();fbHistoryNotice(failures?'Historial parcial: algunos tramos no pudieron cargarse.': '',!!failures);
+  fbConnectWS();fbStartSignalPoll();fbStartCountdown();fbUpdateLegend();
 }
 
 function fbRender() {
@@ -351,7 +387,9 @@ async function fbLoadSymbolStats() {
   const panel = document.getElementById('fb-stats-panel');
   if (!panel || !fbState.symbol) return;
   try {
-    const s = await fetchJson(`/api/chart/symbol_stats?symbol=${encodeURIComponent(fbState.symbol)}`);
+    const symbol=fbState.symbol;
+    const s = await fetchJson(`/api/chart/symbol_stats?symbol=${encodeURIComponent(symbol)}`);
+    if(symbol!==fbState.symbol)return;
     fbRenderStatsPanel(s || {});
   } catch(e) { /* silencioso */ }
 }
@@ -439,7 +477,6 @@ function fbConnectWS() {
     _wsRetryCount = 0;
     _wsLastMsg = Date.now();
     fbCancelOffTimer();
-    fbSetLive(true);
     fbStartHeartbeat();
     sock.send(JSON.stringify({op:'subscribe', args:[{symbol:fbState.symbol, ch:`market_kline_${FB_WS_INTERVAL[fbState.interval]}`}]}));
     _wsPingId = setInterval(() => {
@@ -452,9 +489,8 @@ function fbConnectWS() {
     if (fbState.ws !== sock) return;  // ignorar mensajes de un socket viejo
     _wsLastMsg = Date.now();
     fbCancelOffTimer();
-    fbSetLive(true);
 
-    const message = JSON.parse(evt.data);
+    let message;try{message=JSON.parse(evt.data);}catch{return;}
     if (message.ch !== `market_kline_${FB_WS_INTERVAL[fbState.interval]}` || message.symbol !== fbState.symbol || !message.data) return;
     const k = message.data;
     const candleStart = Math.floor(Number(message.ts) / FB_TF_MS[fbState.interval]) * FB_TF_MS[fbState.interval];
@@ -463,6 +499,9 @@ function fbConnectWS() {
       time: Math.floor(candleStart/1000)+(fbState.tzOff*3600),
       open:+k.o, high:+k.h, low:+k.l, close:+k.c, volume:+k.b,
     };
+
+    if(!Object.values(c).every(Number.isFinite)||c.low<=0||c.high<Math.max(c.open,c.close)||c.low>Math.min(c.open,c.close))return;
+    fbSetLive(true);
 
     // Mantener fbState.data EXACTO (Heikin Ashi se deriva de él)
     const last = fbState.data[fbState.data.length-1];
@@ -557,7 +596,9 @@ async function fbLoadSignals() {
     return;
   }
   try {
-    const res = await fetchJson(`/api/chart/signals?symbol=${fbState.symbol}`);
+    const symbol=fbState.symbol;
+    const res = await fetchJson(`/api/chart/signals?symbol=${symbol}`);
+    if(symbol!==fbState.symbol)return;
     fbState.signals = res;
     fbDrawSignals();
   } catch(e) { console.error('Signals error:', e); }
@@ -1156,8 +1197,8 @@ async function fbReload() {
   fbDisconnectWS();
   fbStopCountdown();
   if(fbState.pollRef)clearInterval(fbState.pollRef);
-  await new Promise(r => setTimeout(r, 60));   // dejar cerrar el WS viejo antes de abrir el nuevo
   fbState.data=[];
+  fbState.signals={closed:[],open:[]};
   if(fbCandles)fbCandles.setData([]);
   if(fbVolume)fbVolume.setData([]);
   fbClearSignals();

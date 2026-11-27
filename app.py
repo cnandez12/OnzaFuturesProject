@@ -35,12 +35,18 @@ PUBLIC_RESULTS_TTL = 15
 response_cache = TTLCache()
 
 
+class MarketDataError(ValueError):
+    def __init__(self, code):
+        super().__init__('Respuesta de mercado inválida')
+        self.code = code if isinstance(code, int) else None
+
+
 def _bitunix_data(path: str, params: dict) -> list:
     response = requests.get(f"{BITUNIX_MARKET}/{path}", params=params, timeout=4)
     response.raise_for_status()
     body = response.json()
     if body.get("code") != 0 or not isinstance(body.get("data"), list):
-        raise ValueError("Respuesta de mercado inválida")
+        raise MarketDataError(body.get("code"))
     return body["data"]
 
 
@@ -57,8 +63,17 @@ def _bitunix_public(path: str, params: dict, ttl: float = 0):
             key = (path, tuple(sorted(params.items())))
             return jsonify(response_cache.get(key, ttl, lambda: _bitunix_data(path, params)))
         return jsonify(_bitunix_data(path, params))
-    except (requests.RequestException, ValueError):
-        return jsonify(error="Datos de Bitunix no disponibles"), 502
+    except MarketDataError as exc:
+        app.logger.warning("Bitunix market rejected path=%s symbol=%s interval=%s code=%s",
+                           path, params.get("symbol", "catalogue"), params.get("interval", ""), exc.code)
+        unavailable = exc.code == 20015
+        return jsonify(error="Bitunix no habilita este mercado para consultar velas" if unavailable else "Datos de Bitunix no disponibles",
+                       code="market_unavailable" if unavailable else "upstream_error",
+                       upstream_code=exc.code), 502
+    except (requests.RequestException, ValueError) as exc:
+        app.logger.warning("Bitunix market failed path=%s symbol=%s interval=%s error=%s",
+                           path, params.get("symbol", "catalogue"), params.get("interval", ""), type(exc).__name__)
+        return jsonify(error="Datos de Bitunix no disponibles", code="upstream_error"), 502
 
 
 @app.get("/api/bitunix/tickers")
