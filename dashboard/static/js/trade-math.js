@@ -63,11 +63,10 @@ function openPositionPnl(p, markPrice) {
   if (!(entry > 0) || !(margin > 0) || !(leverage > 0) || !Number.isFinite(accumulated)) return null;
   const mark = Number(markPrice);
   const sign = direction === 'LONG' ? 1 : -1;
-  const highest = p.tp3_filled ? Number(p.tp3) : p.tp2_filled ? Number(p.tp2) : p.tp1_filled ? Number(p.tp1) : null;
-  const highestUsdt = highest ? sign * (highest-entry)/entry*margin*leverage : 0;
-  const floating = mark > 0 ? sign*(mark-entry)/entry*margin*leverage : null;
-  const net = highest ? highestUsdt : floating;
-  return {margin, accumulated: highestUsdt, floating, net,
+  const remaining = Math.max(0,1-(p.tp1_filled ? .4 : 0)-(p.tp2_filled ? .4 : 0)-(p.tp3_filled ? .2 : 0));
+  const floating = mark > 0 ? sign*(mark-entry)/entry*margin*leverage*remaining : null;
+  const net = floating === null ? (remaining===0?accumulated:null) : accumulated+floating;
+  return {margin, accumulated, remaining, floating, net,
     floatingPct: floating === null ? null : floating/margin*100,
     netPct: net === null ? null : net/margin*100};
 }

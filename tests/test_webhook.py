@@ -84,10 +84,10 @@ class WebhookTests(unittest.TestCase):
         self.assertEqual(response.status_code, 202)
         self.assertEqual(response.json["signalId"], "BTCUSD.P_15M_1790559000000")
 
-    def test_dashboard_is_served_with_onza_brand_after_login(self):
+    def test_dashboard_is_served_with_cryptopilot_brand_after_login(self):
         response = self.client.get("/", auth=PANEL)
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Onza Futures", response.data)
+        self.assertIn(b"CryptoPilot AI", response.data)
 
     def test_rejects_wrong_key_before_db_access(self):
         with patch.dict(os.environ, {"TRADINGVIEW_API_KEY": "different"}), \

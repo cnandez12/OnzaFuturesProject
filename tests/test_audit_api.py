@@ -91,7 +91,7 @@ class AuditApiTests(unittest.TestCase):
         # Cambiar de modo reutiliza la lectura reciente en vez de repetir la consulta completa.
         self.assertEqual(other_mode.status_code, 200)
         self.assertEqual(database.call_count, 1)
-        self.assertEqual(accepted.json["rows"][0]["pnl_usdt"], 1.6)
+        self.assertEqual(accepted.json["rows"][0]["pnl_usdt"], 20.0)
         self.assertTrue(accepted.json["rows"][0]["be_activated"])
         self.assertFalse(accepted.json["rows"][0]["be_fill_verified"])
         self.assertEqual(accepted.json["summary"]["inferred"], 1)

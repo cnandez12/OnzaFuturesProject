@@ -148,7 +148,7 @@ function renderOpen() {
           </div>
         </div>
         <div class="pos-pnl-block">
-          <div class="pos-pnl-label">Escenario máximo TP</div>
+          <div class="pos-pnl-label">Parciales + remanente</div>
           <div class="pos-pnl-net p-net-big" style="color:var(--text3)">—</div>
         </div>
       </div>

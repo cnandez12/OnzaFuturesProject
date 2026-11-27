@@ -119,7 +119,7 @@ def project_public(report, capital, marks=None, quote_as_of=None):
             'methodology':'El trading de futuros conlleva un alto nivel de riesgo. El apalancamiento puede amplificar tanto las ganancias como las pérdidas, y puede ocasionar la pérdida del capital invertido. La información presentada tiene fines informativos y no constituye asesoramiento financiero. Los resultados pasados no garantizan resultados futuros. Evalúa tu situación financiera y tolerancia al riesgo antes de operar.', 'risk_disclaimer':'El trading de futuros conlleva un alto nivel de riesgo. El apalancamiento puede amplificar tanto las ganancias como las pérdidas, y puede ocasionar la pérdida del capital invertido. La información presentada tiene fines informativos y no constituye asesoramiento financiero. Los resultados pasados no garantizan resultados futuros. Evalúa tu situación financiera y tolerancia al riesgo antes de operar.'}
 
 
-def load_public(connection, capital, price_loader=None):
+def load_public(connection, capital, price_loader=None, margin_override=None):
     conn=connection()
     try:
         conn.set_session(readonly=True,isolation_level='REPEATABLE READ')
@@ -129,7 +129,11 @@ def load_public(connection, capital, price_loader=None):
                 cur.execute(AUDIT_SQL)
                 rows=cur.fetchall()
     finally:conn.close()
-    report=build_report(rows,mode='partial_be')
+    report=build_report(rows,mode='partial_be',margin_override=margin_override)
     loader=price_loader or public_market_marks
     marks,quote_as_of=loader([r['symbol'] for r in report['rows'] if not r['closed']])
-    return project_public(report,capital,marks,quote_as_of)
+    result=project_public(report,capital,marks,quote_as_of)
+    if margin_override is not None:
+        from presentation_config import metadata
+        result["presentation"]=metadata()
+    return result

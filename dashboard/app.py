@@ -7,7 +7,8 @@ from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 from datetime import datetime, date
-from dashboard.max_tp import project_sql
+from dashboard.presentation import project_sql
+from presentation_config import INITIAL_CAPITAL, TRADE_MARGIN, metadata as presentation_metadata
 
 load_dotenv()
 
@@ -21,8 +22,8 @@ if _allowed_origins:
 # ── Config ──────────────────────────────────────────────────────────────────
 
 DATABASE_URL    = os.getenv("DATABASE_URL", "")
-INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "1000"))
-MARGIN_PER_TRADE = float(os.getenv("MARGIN_PER_TRADE", "20"))
+INITIAL_BALANCE = float(INITIAL_CAPITAL)
+MARGIN_PER_TRADE = float(TRADE_MARGIN)
 LEVERAGE        = int(os.getenv("LEVERAGE", "20"))
 DASHBOARD_TITLE = "CryptoPilot AI | Señales de TradingView"
 
@@ -145,7 +146,7 @@ def rows_to_list(rows):
     for row in rows:
         d = dict(row)
         if "final_profit_usdt" in d:
-            d["display_mode"] = "max_tp"
+            d["display_mode"] = "partial_be"
         for k, v in d.items():
             if hasattr(v, '__float__'):
                 d[k] = float(v)
@@ -237,6 +238,7 @@ def api_stats():
     result["initial_balance"] = INITIAL_BALANCE
     result["margin_per_trade"] = MARGIN_PER_TRADE
     result["leverage"] = LEVERAGE
+    result["presentation"] = presentation_metadata()
     return jsonify(result)
 
 
@@ -273,7 +275,7 @@ def api_open():
     rows = query(
         """
         SELECT message_id AS id, pair, side AS direction, source_exchange,
-               COALESCE((SELECT margin_used FROM tv_signals WHERE id=trades.message_id), %s) AS margin_used, leverage,
+               %s::numeric AS margin_used, leverage,
                entry, stop_loss, tp1, tp2, tp3,
                tp1_filled, tp2_filled, tp3_filled, date,
                be_active,
@@ -435,7 +437,7 @@ def api_chart_signals():
     open_trades = query(
         """
         SELECT message_id AS id, pair AS symbol, side AS direction,
-               COALESCE((SELECT margin_used FROM tv_signals WHERE id=trades.message_id), %s) AS margin_used, leverage,
+               %s::numeric AS margin_used, leverage,
                entry AS entry_price, stop_loss,
                tp1, tp2, tp3,
                tp1_filled AS hit_tp1, tp2_filled AS hit_tp2, tp3_filled AS hit_tp3,

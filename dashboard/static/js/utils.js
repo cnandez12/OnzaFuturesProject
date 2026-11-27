@@ -32,7 +32,7 @@ function esc(s) {
 const REASON_LABELS = {
   'TP_FORCED': 'Closed', 'Closed': 'Closed',
   'SL_FORCED': 'SL Forced', 'SL': 'SL',
-  'BREAKEVEN': 'Breakeven',
+  'BREAKEVEN': 'Breakeven', 'BE_INFERRED':'Breakeven', 'BE_OBSERVED':'Breakeven',
   'TP3': 'TP3', 'TP2': 'TP2', 'TP1': 'TP1',
 };
 

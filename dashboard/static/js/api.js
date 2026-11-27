@@ -60,7 +60,7 @@ async function loadAll() {
   const marginMismatch = latestMargin > 0 && Math.abs(latestMargin - CFG.margin) > .0001;
   showDataStatus(failures.length
     ? `Datos incompletos o desactualizados: ${failures.length} consultas fallaron. Última carga parcial ${new Date().toLocaleTimeString('es')}.`
-    : `Escenario máximo TP, margen completo · ${trades.length} cierres desde TradingView · actualizado ${new Date().toLocaleTimeString('es')}`
+    : `Cuenta simulada 5.000 USDT · margen 250 USDT · 40/40/20 con BE · ${trades.length} cierres desde TradingView · actualizado ${new Date().toLocaleTimeString('es')}`
       + (marginMismatch ? ' · AVISO: margen configurado distinto del último cierre; P&L abierto estimado.' : ''),
     failures.length > 0 || marginMismatch);
   if (failures.length) console.error('Dashboard data load failed:', failures.map(x => x.reason));
@@ -73,7 +73,7 @@ function renderAll() {
   const reconstructed = trades.filter(t => t.source === 'reconstructed');
   const botWins = bot.filter(t => Number(t.final_profit_usdt) > 0).length;
   const botPnl = bot.reduce((a,t) => a + Number(t.final_profit_usdt || 0), 0);
-  set('source-summary', `TradingView → CryptoPilot AI: ${bot.length} cierres · ${bot.length ? (botWins/bot.length*100).toFixed(1) : '0.0'}% ganadores · ${botPnl >= 0 ? '+' : ''}$${botPnl.toFixed(2)} brutos. Escenario de máximo TP alcanzado.`);
+  set('source-summary', `TradingView → CryptoPilot AI: ${bot.length} cierres · ${bot.length ? (botWins/bot.length*100).toFixed(1) : '0.0'}% ganadores · ${botPnl >= 0 ? '+' : ''}$${botPnl.toFixed(2)} brutos. Gestión 40/40/20 con BE tras TP1.`);
   renderKPIs();
   renderDistributions();
   renderRecent();

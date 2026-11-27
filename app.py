@@ -16,6 +16,7 @@ from audit_scenarios import MODES
 from audit_reporting import AUDIT_SQL, build_report
 from onza_contract import InvalidSignal, canonicalize
 from audit_log import audit
+from presentation_config import TRADE_MARGIN, metadata as presentation_metadata
 from dashboard_auth import install_dashboard_auth
 from public_website import install_public_website
 from request_limits import TTLCache, slow_route
@@ -104,14 +105,16 @@ def _audit_rows():
 @app.get("/api/audit/results")
 @slow_route
 def audit_results():
-    mode = request.args.get("mode", "partial_no_be")
+    mode = request.args.get("mode", "partial_be")
     if mode not in MODES:
         return jsonify(error="Modo de auditoría inválido"), 400
     try:
         event_rows = response_cache.get("audit-rows", AUDIT_ROWS_TTL, _audit_rows)
         report = build_report(event_rows, mode=mode,
                               fallback_margin=os.getenv("MARGIN_PER_TRADE", "20"),
-                              filters={key: request.args.get(key, "") for key in ("from", "to", "status", "search")})
+                              filters={key: request.args.get(key, "") for key in ("from", "to", "status", "search")},
+                              margin_override=TRADE_MARGIN)
+        report["presentation"] = presentation_metadata()
         return jsonify(report)
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
@@ -258,7 +261,7 @@ def public_results():
     try:
         return jsonify(response_cache.get(
             "public-results", PUBLIC_RESULTS_TTL,
-            lambda: load_public(database_connection, INITIAL_BALANCE, price_loader=public_market_marks)))
+            lambda: load_public(database_connection, INITIAL_BALANCE, price_loader=public_market_marks, margin_override=TRADE_MARGIN)))
     except (psycopg2.Error, RuntimeError, ValueError):
         return jsonify(error="Registro temporalmente no disponible"), 503
 

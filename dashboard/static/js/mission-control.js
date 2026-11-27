@@ -31,7 +31,7 @@ function renderOverviewBalanceChart() {
   set('overview-chart-change', (delta >= 0 ? '+' : '-') + '$' + Math.abs(delta).toFixed(2) + ' acumulado');
   const change = el('overview-chart-change');
   if (change) change.style.color = delta >= 0 ? 'var(--green)' : 'var(--red)';
-  set('overview-chart-sub', chronological.length + ' cierres · escenario de máximo TP');
+  set('overview-chart-sub', chronological.length + ' cierres · 40/40/20 con BE');
 
   if (chOverview) chOverview.destroy();
   const ctx = canvas.getContext('2d');

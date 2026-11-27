@@ -1109,7 +1109,7 @@ function fbTickCountdown() {
 }
 
 /* ROI actual desde la entrada hasta el mark price vigente.
-   Independiente del máximo TP usado por el historial y el balance. */
+   Incluye parciales realizados y el remanente flotante de la cuenta representada. */
 function fbOpenNetPct(sig, mark) {
   const entry = Number(sig.entry_price);
   const price = Number(mark);
@@ -1118,7 +1118,11 @@ function fbOpenNetPct(sig, mark) {
   if (![entry, price, leverage].every(Number.isFinite) ||
       entry <= 0 || price <= 0 || leverage <= 0 ||
       !['LONG', 'SHORT'].includes(direction)) return null;
-  return (direction === 'LONG' ? price - entry : entry - price) / entry * leverage * 100;
+  const raw = (direction === 'LONG' ? price - entry : entry - price) / entry * leverage * 100;
+  const remaining = Math.max(0,1-(sig.hit_tp1 ? .4 : 0)-(sig.hit_tp2 ? .4 : 0)-(sig.hit_tp3 ? .2 : 0));
+  const margin = Number(sig.margin_used);
+  if (!(margin>0)) return null;
+  return Number(sig.pnl_accumulated||0)/margin*100 + raw*remaining;
 }
 
 function fbUpdateDeltaPnl() {

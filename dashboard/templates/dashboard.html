@@ -102,9 +102,9 @@
 <section id="pg-overview" class="page active">
   <header class="mission-head">
     <div>
-      <div class="mission-eyebrow"><span class="live-dot"></span> Centro de señales <span class="scope-pill">MÁXIMO TP</span></div>
+      <div class="mission-eyebrow"><span class="live-dot"></span> Centro de señales <span class="scope-pill">40/40/20 + BE</span></div>
       <h1>Inteligencia de <span class="gradient-text">señales</span></h1>
-      <p>Monitoreo de señales, precios de mercado y resultados simulados.</p>
+      <p>Cuenta simulada desde 5.000 USDT · margen de 250 USDT por señal · gestión 40/40/20 con BE.</p>
     </div>
     <div class="mission-actions">
       <button class="mission-btn" type="button" onclick="openSignalSearch()">⌕ <span>Buscar señal</span></button>
@@ -117,7 +117,7 @@
     <div class="kpi-card">
       <div class="kpi-accent" id="k-bal-accent"></div>
       <div class="kpi-glow" id="k-bal-glow"></div>
-      <div class="kpi-label">Balance · máximo TP</div>
+      <div class="kpi-label">Balance · parciales con BE</div>
       <div class="kpi-value" id="k-balance">—</div>
       <div class="kpi-sub" id="k-balance-sub">Inicial: $<span id="k-inicial">—</span></div>
       <div class="kpi-trend" id="k-bal-trend">—</div>
@@ -451,7 +451,7 @@
   <div class="card hist-tbl-wrap">
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th class="col-idx">#</th><th>Símbolo</th><th>Dir</th><th class="col-price">Entry</th><th class="col-price">Exit</th><th class="col-fill" title="ROI del nivel sobre el margen completo">TP1</th><th class="col-fill" title="ROI del nivel sobre el margen completo">TP2</th><th class="col-fill" title="ROI del nivel sobre el margen completo">TP3</th><th>P&amp;L %</th><th>USDT</th><th>Cierre</th><th class="col-dur">Duración</th><th class="col-bal">Balance</th><th class="col-date">Cerrado</th></tr></thead>
+        <thead><tr><th class="col-idx">#</th><th>Símbolo</th><th>Dir</th><th class="col-price">Entry</th><th class="col-price">Exit</th><th class="col-fill" title="Contribución del parcial al ROI sobre el margen inicial">TP1</th><th class="col-fill" title="Contribución del parcial al ROI sobre el margen inicial">TP2</th><th class="col-fill" title="Contribución del parcial al ROI sobre el margen inicial">TP3</th><th>P&amp;L %</th><th>USDT</th><th>Cierre</th><th class="col-dur">Duración</th><th class="col-bal">Balance</th><th class="col-date">Cerrado</th></tr></thead>
         <tbody id="tb-history"></tbody>
       </table>
     </div>
@@ -620,7 +620,7 @@
   <div class="card audit-card" style="padding:16px;">
     <div class="audit-controls">
       <label>Escenario<select id="audit-mode" onchange="renderAudit()">
-        <option value="partial_no_be">40/40/20 · stop original</option><option value="partial_be">40/40/20 · BE tras TP1</option>
+        <option value="partial_no_be">40/40/20 · stop original</option><option value="partial_be" selected>40/40/20 · BE tras TP1</option>
         <option value="max_tp">100% al TP más alto · retrospectivo</option></select></label>
       <label>Entrada desde · Colombia<input id="audit-from" type="date"></label>
       <label>Entrada hasta · Colombia<input id="audit-to" type="date"></label>
@@ -647,20 +647,20 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
 <script src="/static/js/config.js"></script>
-<script src="/static/js/utils.js"></script>
-<script src="/static/js/trade-math.js"></script>
-<script src="/static/js/api.js?v=cryptopilot-1"></script>
+<script src="/static/js/utils.js?v=account-5000-1"></script>
+<script src="/static/js/trade-math.js?v=account-5000-1"></script>
+<script src="/static/js/api.js?v=account-5000-1"></script>
 <script src="/static/js/nav.js"></script>
 <script src="/static/js/kpis.js"></script>
 <script src="/static/js/distributions.js"></script>
 <script src="/static/js/recent.js"></script>
 <script src="/static/js/simulator.js"></script>
-<script src="/static/js/open-positions.js"></script>
-<script src="/static/js/mission-control.js"></script>
+<script src="/static/js/open-positions.js?v=account-5000-1"></script>
+<script src="/static/js/mission-control.js?v=account-5000-1"></script>
 <script src="/static/js/history.js"></script>
 <script src="/static/js/curve.js"></script>
 <script src="/static/js/symbols.js"></script>
-<script src="/static/js/fb-chart.js?v=mobile-chart-1"></script>
+<script src="/static/js/fb-chart.js?v=account-5000-1"></script>
 <script src="/static/js/audit.js?v=4"></script>
 <script src="/static/js/timers.js"></script>
 <script src="/static/js/app.js"></script>

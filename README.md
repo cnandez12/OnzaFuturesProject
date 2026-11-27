@@ -132,3 +132,15 @@ Cada TP/SL/cierre rota entre 25 diseños. La tarjeta muestra el movimiento entre
 - **Apalancamiento.** El contrato acepta de 1 a 125, pero las tarjetas exigen 20X: con otro valor la entrada se publica y sus resultados quedan `failed`.
 - **Hora de cierre.** `closed_at` es la hora de procesamiento, no la de la alerta; tras un atraso del worker, un cierre puede caer en el resumen del día siguiente.
 - **Base de datos.** Las instalaciones anteriores conservan columnas `onza_*` y las tablas `daily_profits`, `weekly_profits` y `monthly_profits` de versiones previas. Son historial: el código no las usa.
+
+
+## Cuenta representada en las webs
+
+Ambas webs muestran una proyección de consulta con 5.000 USDT de capital inicial,
+250 USDT de margen fijo por señal y parciales 40/40/20 con BE tras TP1.
+`presentation_config.py` define este modelo. Las variables operativas
+`INITIAL_BALANCE` y `MARGIN_PER_TRADE`, los eventos y los importes originales
+almacenados no se modifican. Los workers no importan esta configuración.
+La auditoría conserva la conciliación contra el registro fuente original.
+El capital de referencia no impone filtros de admisión de señales: esta proyección
+no modela disponibilidad de margen, liquidación, comisiones ni funding.

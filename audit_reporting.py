@@ -30,7 +30,7 @@ def public_event(e):
             "applied_at": e["applied_at"].isoformat() if e.get("applied_at") else None}
 
 
-def build_report(event_rows, *, mode, fallback_margin="20", filters=None):
+def build_report(event_rows, *, mode, fallback_margin="20", filters=None, margin_override=None):
     filters = filters or {}
     start = date.fromisoformat(filters["from"]) if filters.get("from") else None
     end = date.fromisoformat(filters["to"]) if filters.get("to") else None
@@ -56,6 +56,9 @@ def build_report(event_rows, *, mode, fallback_margin="20", filters=None):
             continue
         meta = entry
         margin = meta.get("margin_used") if meta.get("margin_used") is not None else fallback_margin
+        source_margin = margin
+        if margin_override is not None:
+            margin = margin_override
         try:
             scenarios = {key: evaluate(sid, applied, mode=key, margin=margin,
                                       be_activated_at=meta.get("be_activated_at")) for key in sorted(MODES)}
@@ -73,9 +76,11 @@ def build_report(event_rows, *, mode, fallback_margin="20", filters=None):
             continue
         result = dict(scenarios[mode])
         recorded = meta.get("recorded_pnl")
-        difference = (round(float(Decimal(str(baseline["pnl_usdt"])) - Decimal(str(recorded))), 2)
+        source_baseline = (evaluate(sid, applied, mode="partial_no_be", margin=source_margin)
+                           if margin_override is not None else baseline)
+        difference = (round(float(Decimal(str(source_baseline["pnl_usdt"])) - Decimal(str(recorded))), 2)
                       if baseline["closed"] and recorded is not None else None)
-        result.update({"source_exchange": meta.get("exchange"), "margin_recorded": meta.get("margin_used") is not None,
+        result.update({"source_margin_used": float(source_margin), "presentation_only": margin_override is not None, "source_exchange": meta.get("exchange"), "margin_recorded": meta.get("margin_used") is not None,
                        "be_persisted": meta.get("be_activated_at") is not None,
                        "stored_be_stop_price": float(meta["stored_be_stop_price"]) if meta.get("stored_be_stop_price") is not None else None,
                        "telegram_counts": dict(Counter(str(e.get("telegram_status")) for e in events)),
