@@ -35,7 +35,7 @@ class PublicWebsiteTests(unittest.TestCase):
     def test_cryptopilot_public_domain_does_not_request_dashboard_password(self):
         # Railway may retain the old explicit variable during the domain migration.
         with patch.dict('os.environ', {'PUBLIC_WEBSITE_HOSTS': 'trade-onzafutures.up.railway.app'}):
-            public = 'https://trade-cryptopilot.up.railway.app'
+            public = 'https://cryptopilotfutures.up.railway.app'
             for path in ('/', '/app.js', '/cryptopilot-logo.png'):
                 response = self.get(path, base_url=public)
                 self.assertEqual(response.status_code, 200)

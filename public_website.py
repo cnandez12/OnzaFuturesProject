@@ -21,7 +21,7 @@ def install_public_website(app):
 
     @app.before_request
     def public_host_only():
-        hosts = {'trade-cryptopilot.up.railway.app'} | {host.strip().lower() for host in os.getenv(
+        hosts = {'cryptopilotfutures.up.railway.app'} | {host.strip().lower() for host in os.getenv(
             'PUBLIC_WEBSITE_HOSTS', 'trade-onzafutures.up.railway.app'
         ).split(',') if host.strip()}
         host = request.host.partition(':')[0].lower()
