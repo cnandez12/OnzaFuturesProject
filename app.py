@@ -120,8 +120,9 @@ def _binance_candles(symbol, interval, start, end):
         result.headers["X-Chart-Market-Status"] = contract.get("status", "UNKNOWN")
         return result
     except (requests.RequestException, ValueError, KeyError, IndexError, TypeError) as exc:
-        app.logger.warning("Binance chart failed symbol=%s interval=%s error=%s", symbol, interval, type(exc).__name__)
-        return jsonify(error="Respaldo Binance Futures no disponible", code="upstream_error", source="BINANCE"), 502
+        upstream_status = getattr(getattr(exc, "response", None), "status_code", None)
+        app.logger.warning("Binance chart failed symbol=%s interval=%s error=%s http=%s", symbol, interval, type(exc).__name__, upstream_status)
+        return jsonify(error="Respaldo Binance Futures no disponible", code="upstream_error", source="BINANCE", upstream_status=upstream_status), 502
 
 
 @app.get("/api/bitunix/kline")
