@@ -1182,3 +1182,8 @@ document.addEventListener('DOMContentLoaded', () => {
     else fbClearSignals();
   });
 });
+
+function toggleFBStats(button) {
+  const shown=document.getElementById('pg-chart').classList.toggle('show-chart-stats');
+  button.setAttribute('aria-pressed',String(shown));
+}

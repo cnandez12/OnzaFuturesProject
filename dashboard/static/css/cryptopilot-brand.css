@@ -227,3 +227,10 @@ button,input,select { font-family:inherit; }
   .kpi-label { font-size:8px; line-height:1.35; }
   #pg-chart { bottom:calc(66px + env(safe-area-inset-bottom))!important; }
 }
+
+/* Keep the market visible on phones; statistics remain available on demand. */
+.mobile-chart-stats{display:none}
+@media(max-width:720px){
+  .mobile-chart-stats{display:inline-block;flex-shrink:0;white-space:nowrap}
+  #pg-chart:not(.show-chart-stats) #fb-stats-panel{display:none!important}
+}
