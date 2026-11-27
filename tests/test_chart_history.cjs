@@ -1,9 +1,9 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 (async()=>{for(const path of ['dashboard/static/js/fb-chart.js','public-site/fb-chart.js']){
- const source=fs.readFileSync(path,'utf8');const code=source.slice(source.indexOf('async function fbHistoryChunk'),source.indexOf('\nfunction fbRender()'));
+ const source=fs.readFileSync(path,'utf8');const code=source.slice(source.indexOf('async function fbBinanceDirectHistory'),source.indexOf('\nfunction fbRender()'));
  const nodes={clSym:{},'fb-wm-sym':{}};let sockets=0,rendered=0,notice='',calls=0;
  const row={time:Date.now()-900000,open:'10',high:'11',low:'9',close:'10',baseVol:'1'};
- const context=vm.createContext({console:{warn(){}},AbortSignal,Date,Number,Set,Promise,Math,Array,Object,Error,
+ const context=vm.createContext({console:{warn(){}},AbortSignal,Date,Number,Set,Promise,Math,Array,Object,Error,URL,URLSearchParams,location:{origin:'https://example.test'},
  FB_REST:'/candles',FB_CANDLES:400,FB_CHUNK:200,FB_TF_MS:{'15m':900000},
  fbState:{symbol:'EPICUSDT',interval:'15m',tzOff:-5,data:[]},publicFocusedSignal:null,
  fbChartSource:(source,status)=>{context.fbState.marketSource=source;context.fbState.marketStatus=status;},fbStartBinanceUpdates(){},fbSetLive(){},fbHistoryNotice:(text)=>notice=text,fbRender:()=>rendered++,fbConnectWS:()=>sockets++,
@@ -33,6 +33,12 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
  context.fbState.symbol='NEWUSDT';context.fetch=async()=>({ok:true,json:async()=>[{...row,close:'11'},{...row,time:row.time-900000}]});
  await vm.runInContext('fbLoadData()',context);release({ok:true,json:async()=>[row]});await old;
  assert.equal(context.fbState.data.length,2);assert.equal(nodes.clSym.textContent,'NEWUSDT');
+ context.fetch=async url=>url.startsWith('https://fapi.binance.com/fapi/v1/exchangeInfo')
+  ?{ok:true,json:async()=>({symbols:[{symbol:'EPICUSDT',contractType:'PERPETUAL',quoteAsset:'USDT',marginAsset:'USDT',status:'SETTLING'}]})}
+  :url.startsWith('https://fapi.binance.com/fapi/v1/klines')?{ok:true,json:async()=>[[1000,'10','11','9','10','5',2000,'50']]}
+  :{ok:false,json:async()=>({code:'upstream_error',upstream_status:451})};
+ const direct=await vm.runInContext("fbHistoryChunk('/candles?source=binance&symbol=EPICUSDT&interval=15m&startTime=1000&endTime=2000')",context);
+ assert.equal(direct[0].close,'10');assert.equal(direct.marketStatus,'SETTLING');
  const poller=source.slice(source.indexOf('function fbStartBinanceUpdates()'),source.indexOf('function fbConnectWS()'));
  let refreshes=0,updates=0;context.fbState.marketSource='BINANCE';context.fbState.marketStatus='SETTLING';
  context.fbHistoryChunk=async()=>{refreshes++;return [{...row,close:'11'}]};

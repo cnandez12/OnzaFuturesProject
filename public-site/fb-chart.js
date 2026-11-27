@@ -281,12 +281,37 @@ function fbChartSource(source, status='') {
     :source==='BITUNIX'?'Velas: Bitunix Futures':'Fuente de velas: comprobando disponibilidad…';
 }
 
+async function fbBinanceDirectHistory(url) {
+  // Binance permits public CORS requests. Use the visitor's ordinary connection
+  // when Railway's location cannot access this public market-data endpoint.
+  const get=async endpoint=>{
+    const response=await fetch(endpoint,{signal:AbortSignal.timeout(10000)});
+    if(!response.ok)throw Object.assign(new Error('Binance Futures no disponible desde esta conexión'),{code:'binance_connection_unavailable'});
+    return response.json();
+  };
+  if(!fbState._binanceCatalogue||Date.now()-fbState._binanceCatalogueAt>300000){
+    if(!fbState._binanceCataloguePromise)fbState._binanceCataloguePromise=get('https://fapi.binance.com/fapi/v1/exchangeInfo')
+      .then(body=>{if(!Array.isArray(body.symbols))throw Error('Catálogo Binance inválido');fbState._binanceCatalogue=body.symbols;fbState._binanceCatalogueAt=Date.now();})
+      .finally(()=>{fbState._binanceCataloguePromise=null;});
+    await fbState._binanceCataloguePromise;
+  }
+  const query=new URL(url,location.origin).searchParams,symbol=query.get('symbol');
+  const contract=fbState._binanceCatalogue.find(s=>s.symbol===symbol&&s.contractType==='PERPETUAL'&&s.quoteAsset==='USDT'&&s.marginAsset==='USDT');
+  if(!contract)throw Object.assign(new Error('Sin contrato compatible en Binance Futures'),{code:'market_unavailable'});
+  const params=new URLSearchParams({symbol,interval:query.get('interval'),startTime:query.get('startTime'),endTime:query.get('endTime'),limit:'200'});
+  const body=await get('https://fapi.binance.com/fapi/v1/klines?'+params);
+  if(!Array.isArray(body))throw Error('Velas Binance inválidas');
+  const rows=body.map(k=>({time:String(k[0]),open:k[1],high:k[2],low:k[3],close:k[4],baseVol:k[5],quoteVol:k[7]}));
+  rows.marketStatus=contract.status;return rows;
+}
+
 async function fbHistoryChunk(url) {
   let error;
   for(let attempt=0;attempt<2;attempt++){
     try{
       const response=await fetch(url,{signal:AbortSignal.timeout(10000)});
       const body=await response.json();
+      if(!response.ok&&body.upstream_status===451&&url.includes('source=binance'))return await fbBinanceDirectHistory(url);
       if(!response.ok){error=Object.assign(new Error(body.error||'Fallo al consultar velas'),{code:body.code});
         throw error;
       }else if(Array.isArray(body)){body.marketStatus=response.headers?.get('X-Chart-Market-Status')||'UNKNOWN';if(body.length||attempt===1)return body;}
