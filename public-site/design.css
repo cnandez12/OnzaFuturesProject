@@ -8,3 +8,6 @@ body{background:radial-gradient(ellipse at 80% 0%,#18243c 0,transparent 28%),rad
 
 @media(min-width:1001px){.hero h1{font-size:clamp(42px,5.1vw,68px)}}
 @media(max-width:720px){.hero:before{left:0;right:0}.selector select{width:100%;min-width:0;max-width:100%}.filters{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.filters label{min-width:0}.filters label:first-child,.filters>.button{grid-column:1/-1;width:100%}.filters input{width:100%;min-width:0;max-width:100%}}
+
+/* Official CryptoPilot AI mark; preserve its aspect ratio. */
+.brand img,.orbital-logo,.phone-brand img{object-fit:contain}

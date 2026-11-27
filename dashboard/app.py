@@ -24,7 +24,7 @@ DATABASE_URL    = os.getenv("DATABASE_URL", "")
 INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "1000"))
 MARGIN_PER_TRADE = float(os.getenv("MARGIN_PER_TRADE", "20"))
 LEVERAGE        = int(os.getenv("LEVERAGE", "20"))
-DASHBOARD_TITLE = "Onza Futures | Señales de TradingView"
+DASHBOARD_TITLE = "CryptoPilot AI | Señales de TradingView"
 
 db_pool = None
 

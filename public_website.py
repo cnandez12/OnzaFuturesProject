@@ -7,7 +7,7 @@ from flask import abort, request, send_from_directory
 PUBLIC_FILES = frozenset({
     'index.html', 'app.js', 'chart-adapter.js', 'fb-chart.js', 'experience.js',
     'premium.js', 'style.css', 'design.css', 'premium.css', 'chart-page.css',
-    'onza-logo.png', 'vendor/lightweight-charts.js',
+    'onza-logo.png', 'cryptopilot-logo.png', 'vendor/lightweight-charts.js',
     'vendor/LICENSE-lightweight-charts.txt', 'vendor/MOTION-LICENSE.txt',
     'vendor/THREE-LICENSE.txt',
 })

@@ -73,7 +73,7 @@ function renderAll() {
   const reconstructed = trades.filter(t => t.source === 'reconstructed');
   const botWins = bot.filter(t => Number(t.final_profit_usdt) > 0).length;
   const botPnl = bot.reduce((a,t) => a + Number(t.final_profit_usdt || 0), 0);
-  set('source-summary', `TradingView → Onza Futures: ${bot.length} cierres · ${bot.length ? (botWins/bot.length*100).toFixed(1) : '0.0'}% ganadores · ${botPnl >= 0 ? '+' : ''}$${botPnl.toFixed(2)} brutos. Escenario de máximo TP alcanzado.`);
+  set('source-summary', `TradingView → CryptoPilot AI: ${bot.length} cierres · ${bot.length ? (botWins/bot.length*100).toFixed(1) : '0.0'}% ganadores · ${botPnl >= 0 ? '+' : ''}$${botPnl.toFixed(2)} brutos. Escenario de máximo TP alcanzado.`);
   renderKPIs();
   renderDistributions();
   renderRecent();
