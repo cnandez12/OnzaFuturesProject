@@ -85,11 +85,53 @@ def bitunix_tickers():
     return _bitunix_public("tickers", {"symbols": symbols}, ttl=TICKERS_TTL)
 
 
+BINANCE_FUTURES = "https://fapi.binance.com/fapi/v1"
+
+
+def _binance_contracts():
+    response = requests.get(f"{BINANCE_FUTURES}/exchangeInfo", timeout=4)
+    response.raise_for_status()
+    symbols = response.json().get("symbols")
+    if not isinstance(symbols, list):
+        raise ValueError("Catálogo Binance inválido")
+    return {s["symbol"]: s for s in symbols if s.get("contractType") == "PERPETUAL"
+            and s.get("quoteAsset") == "USDT" and s.get("marginAsset") == "USDT"}
+
+
+def _binance_candles(symbol, interval, start, end):
+    try:
+        contracts = response_cache.get("binance-futures-contracts", 300, _binance_contracts)
+        contract = contracts.get(symbol)
+        if contract is None:
+            return jsonify(error="Binance Futures no ofrece este contrato perpetuo USDT",
+                           code="market_unavailable", source="BINANCE"), 404
+        params = dict(symbol=symbol, interval=interval, startTime=start, endTime=end, limit=200)
+        def fetch_candles():
+            response = requests.get(f"{BINANCE_FUTURES}/klines", params=params, timeout=4)
+            response.raise_for_status()
+            body = response.json()
+            if not isinstance(body, list):
+                raise ValueError("Velas Binance inválidas")
+            return [dict(time=str(k[0]), open=k[1], high=k[2], low=k[3], close=k[4],
+                         baseVol=k[5], quoteVol=k[7]) for k in body]
+        candles = response_cache.get(("binance-kline", tuple(sorted(params.items()))), 5, fetch_candles)
+        result = jsonify(candles)
+        result.headers["X-Chart-Source"] = "BINANCE"
+        result.headers["X-Chart-Market-Status"] = contract.get("status", "UNKNOWN")
+        return result
+    except (requests.RequestException, ValueError, KeyError, IndexError, TypeError) as exc:
+        app.logger.warning("Binance chart failed symbol=%s interval=%s error=%s", symbol, interval, type(exc).__name__)
+        return jsonify(error="Respaldo Binance Futures no disponible", code="upstream_error", source="BINANCE"), 502
+
+
 @app.get("/api/bitunix/kline")
 @slow_route
 def bitunix_kline():
     symbol = request.args.get("symbol", "")
     interval = request.args.get("interval", "")
+    source = request.args.get("source", "bitunix")
+    if source not in ("bitunix", "binance"):
+        return jsonify(error="Fuente de velas inválida"), 400
     if not re.fullmatch(r"[A-Z0-9]+USDT", symbol) or interval not in BITUNIX_INTERVALS:
         return jsonify(error="Parámetros de vela inválidos"), 400
     try:
@@ -99,6 +141,8 @@ def bitunix_kline():
         return jsonify(error="Fechas inválidas"), 400
     if start <= 0 or end <= start or end - start > 366 * 86400000:
         return jsonify(error="Rango de fechas inválido"), 400
+    if source == "binance":
+        return _binance_candles(symbol, interval, start, end)
     return _bitunix_public("kline", {"symbol": symbol, "interval": interval,
                                       "startTime": start, "endTime": end,
                                       "limit": 200, "type": "LAST_PRICE"})

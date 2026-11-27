@@ -265,6 +265,17 @@ function fbHistoryNotice(message, retry=false) {
     button.onclick=()=>fbReload();notice.appendChild(button);}
 }
 
+function fbChartSource(source, status='') {
+  fbState.marketSource=source;fbState.marketStatus=status;
+  const container=document.getElementById('fb-chart-container');if(!container)return;
+  let badge=document.getElementById('fb-chart-source');
+  if(!badge){badge=document.createElement('div');badge.id='fb-chart-source';badge.setAttribute('role','status');
+    badge.style.cssText='position:absolute;left:12px;bottom:34px;max-width:calc(100% - 95px);z-index:32;padding:5px 8px;border-radius:5px;background:#08131ee8;color:#b9d8ed;font:11px/1.4 sans-serif;pointer-events:none;';container.appendChild(badge);}
+  badge.textContent=source==='BINANCE'
+    ?'Velas: Binance Futures · respaldo · precios de referencia'+(status!=='TRADING'?' · contrato sin negociación activa':'')
+    :source==='BITUNIX'?'Velas: Bitunix Futures':'Fuente de velas: comprobando disponibilidad…';
+}
+
 async function fbHistoryChunk(url) {
   let error;
   for(let attempt=0;attempt<2;attempt++){
@@ -272,10 +283,10 @@ async function fbHistoryChunk(url) {
       const response=await fetch(url,{signal:AbortSignal.timeout(10000)});
       const body=await response.json();
       if(!response.ok){error=Object.assign(new Error(body.error||'Fallo al consultar velas'),{code:body.code});
-        if(body.code==='market_unavailable')throw error;
-      }else if(Array.isArray(body)){if(body.length||attempt===1)return body;}
+        throw error;
+      }else if(Array.isArray(body)){body.marketStatus=response.headers?.get('X-Chart-Market-Status')||'UNKNOWN';if(body.length||attempt===1)return body;}
       else error=new Error('Formato de velas inválido');
-    }catch(exc){error=exc;if(exc.code==='market_unavailable')throw exc;}
+    }catch(exc){error=exc;if(exc.code||!url.includes('source=binance'))throw exc;}
   }
   throw error||new Error('Historial no disponible');
 }
@@ -288,21 +299,35 @@ async function fbLoadData() {
   if (!ms || !fbState.symbol) return;
 
   const now = Date.now();
-  fbState._historyError='';fbSetLive(false);fbHistoryNotice('Cargando velas de '+symbol+'…');
+  fbState._historyError='';fbSetLive(false);fbChartSource(null);fbHistoryNotice('Cargando velas de '+symbol+'…');
   const chunkSize=FB_CHUNK,chunks=Math.ceil(FB_CANDLES/chunkSize);
   const globalStart=now-FB_CANDLES*ms;
-  const results=[];let failures=0,marketUnavailable=false;
-  for(let i=0;i<chunks;i+=3){
-    if(generation!==fbState._dataGeneration||symbol!==fbState.symbol||iv!==fbState.interval)return;
-    const batch=await Promise.all(Array.from({length:Math.min(3,chunks-i)},async(_,j)=>{
-      const st=globalStart+(i+j)*chunkSize*ms;
-      const url=`${FB_REST}?symbol=${encodeURIComponent(symbol)}&interval=${iv}&startTime=${st}&endTime=${st+chunkSize*ms-1}`;
-      try{return await fbHistoryChunk(url);}catch(error){failures++;marketUnavailable ||= error.code==='market_unavailable';
-        console.warn('Chart history failed',symbol,iv,error.code||error.message);return [];}
-    }));
-    results.push(...batch);if(marketUnavailable)break;
+  const active=()=>generation===fbState._dataGeneration&&symbol===fbState.symbol&&iv===fbState.interval;
+  const loadSource=async source=>{
+    const result={rows:[],failures:0,marketUnavailable:false};
+    for(let i=0;i<chunks;i+=3){
+      if(!active())return result;
+      const batch=await Promise.all(Array.from({length:Math.min(3,chunks-i)},async(_,j)=>{
+        const st=globalStart+(i+j)*chunkSize*ms;
+        const url=`${FB_REST}?source=${source}&symbol=${encodeURIComponent(symbol)}&interval=${iv}&startTime=${st}&endTime=${st+chunkSize*ms-1}`;
+        try{return await fbHistoryChunk(url);}catch(error){result.failures++;result.marketUnavailable ||= error.code==='market_unavailable';
+          console.warn('Chart history failed',source,symbol,iv,error.code||error.message);return [];}
+      }));
+      result.rows.push(...batch);
+      if(source==='bitunix'&&result.failures)break;
+      if(result.marketUnavailable)break;
+    }
+    return result;
+  };
+  let loaded=await loadSource('bitunix'),source='BITUNIX';
+  if(!active())return;
+  if(loaded.failures||!loaded.rows.some(rows=>rows.length)){
+    fbHistoryNotice('Bitunix no disponible. Consultando Binance Futures…');
+    loaded=await loadSource('binance');source='BINANCE';
   }
-  if(generation!==fbState._dataGeneration||symbol!==fbState.symbol||iv!==fbState.interval)return;
+  if(!active())return;
+  const results=loaded.rows,failures=loaded.failures,marketUnavailable=loaded.marketUnavailable;
+  fbChartSource(source,source==='BINANCE'?(results.find(rows=>rows.marketStatus)?.marketStatus||'UNKNOWN'):'TRADING');
   const all=[];
   for(const raw of results)for(const k of raw){
     const c={time:Number(k.time)/1000+fbState.tzOff*3600,open:+k.open,high:+k.high,low:+k.low,close:+k.close,volume:+k.baseVol};
@@ -315,12 +340,13 @@ async function fbLoadData() {
   fbLoadSymbolStats();
   if(fbState.data.length<2){
     fbState._historyError=marketUnavailable
-      ?'Bitunix no habilita el historial de '+symbol+'. Selecciona otro activo. Las operaciones registradas se conservan.'
+      ?'No hay historial compatible de '+symbol+' en Bitunix ni en Binance Futures. Las operaciones registradas se conservan.'
       : 'No se pudo cargar el historial de '+symbol+'. Reintenta la consulta o selecciona otro activo.';
     fbHistoryNotice(fbState._historyError,true);return;
   }
   fbRender();fbHistoryNotice(failures?'Historial parcial: algunos tramos no pudieron cargarse.': '',!!failures);
-  fbConnectWS();fbStartSignalPoll();fbStartCountdown();fbUpdateLegend();
+  if(source==='BINANCE')fbStartBinanceUpdates();else fbConnectWS();
+  fbStartSignalPoll();fbStartCountdown();fbUpdateLegend();
 }
 
 function fbRender() {
@@ -466,7 +492,34 @@ const WS_STALE_MS     = 60000;
 const WS_OFF_DELAY_MS = 8000;
 const WS_MAX_RETRY_MS = 30000;
 
+function fbStartBinanceUpdates() {
+  const symbol=fbState.symbol,iv=fbState.interval,generation=fbState._dataGeneration;
+  if(fbState.marketStatus!=='TRADING'){fbSetLive(false);return;}
+  let busy=false;
+  const active=()=>generation===fbState._dataGeneration&&symbol===fbState.symbol&&iv===fbState.interval&&fbState.marketSource==='BINANCE';
+  const update=async()=>{
+    if(busy||!active())return;busy=true;
+    try{
+      const ms=FB_TF_MS[iv],end=Math.floor(Date.now()/ms)*ms+ms-1;
+      const rows=await fbHistoryChunk(`${FB_REST}?source=binance&symbol=${encodeURIComponent(symbol)}&interval=${iv}&startTime=${end-3*ms+1}&endTime=${end}`);
+      if(!active())return;
+      let changed=false;
+      for(const k of rows.sort((a,b)=>Number(a.time)-Number(b.time))){
+        const c={time:Number(k.time)/1000+fbState.tzOff*3600,open:+k.open,high:+k.high,low:+k.low,close:+k.close,volume:+k.baseVol};
+        if(!Object.values(c).every(Number.isFinite)||c.low<=0||c.high<Math.max(c.open,c.close)||c.low>Math.min(c.open,c.close))continue;
+        const last=fbState.data.at(-1);
+        if(last&&last.time===c.time){Object.assign(last,c);changed=true;}
+        else if(!last||c.time>last.time){fbState.data.push(c);changed=true;}
+      }
+      if(changed){fbBuildSeriesData();fbUpdateLegend();fbTickCountdown();fbSetLive(true);}else fbSetLive(false);
+    }catch(error){if(active()){fbSetLive(false);console.warn('Binance chart refresh failed',symbol,error.code||error.message);}}
+    finally{busy=false;}
+  };
+  update();fbState.marketPollRef=setInterval(update,5000);
+}
+
 function fbConnectWS() {
+  if(fbState.marketSource==='BINANCE')return;
   fbDisconnectWS(true);
   fbState.reconnect = true;
   const sock = new WebSocket(FB_WS);   // referencia local → guard de identidad
@@ -552,6 +605,7 @@ function fbScheduleOff() { if (!_wsOffTimeout) _wsOffTimeout = setTimeout(() => 
 function fbCancelOffTimer() { if (_wsOffTimeout) { clearTimeout(_wsOffTimeout); _wsOffTimeout = null; } }
 
 function fbDisconnectWS(keepReconnect) {
+  if(fbState.marketPollRef){clearInterval(fbState.marketPollRef);fbState.marketPollRef=null;}
   if (!keepReconnect) fbState.reconnect = false;
   fbCancelOffTimer();
   fbStopHeartbeat();

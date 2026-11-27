@@ -29,3 +29,28 @@ class MarketQuoteTests(unittest.TestCase):
   self.assertEqual(r.json['code'],'market_unavailable')
   self.assertEqual(r.json['upstream_code'],20015)
   self.assertIn('symbol=EPICUSDT',logs.output[0])
+
+ def test_binance_backup_accepts_only_matching_usdt_perpetual_and_normalizes(self):
+  catalogue=Mock();catalogue.json.return_value={'symbols':[{'symbol':'EPICUSDT','contractType':'PERPETUAL','quoteAsset':'USDT','marginAsset':'USDT','status':'SETTLING'}]}
+  candles=Mock();candles.json.return_value=[[1000,'10','11','9','10','5',1999,'50']]
+  with patch.object(receiver.requests,'get',side_effect=[catalogue,candles]) as get:
+   r=receiver.app.test_client().get('/api/public/candles?source=binance&symbol=EPICUSDT&interval=15m&startTime=1000&endTime=2000',base_url='https://cryptopilotfutures.up.railway.app')
+  self.assertEqual(r.status_code,200)
+  self.assertEqual(r.json[0]['close'],'10')
+  self.assertEqual(r.json[0]['baseVol'],'5')
+  self.assertEqual(r.headers['X-Chart-Source'],'BINANCE')
+  self.assertEqual(r.headers['X-Chart-Market-Status'],'SETTLING')
+  self.assertIn('/fapi/v1/klines',get.call_args.args[0])
+
+ def test_binance_backup_rejects_non_perpetual_or_missing_contract(self):
+  catalogue=Mock();catalogue.json.return_value={'symbols':[{'symbol':'EPICUSDT','contractType':'CURRENT_QUARTER','quoteAsset':'USDT','marginAsset':'USDT'}]}
+  with patch.object(receiver.requests,'get',return_value=catalogue) as get:
+   r=receiver.app.test_client().get('/api/bitunix/kline?source=binance&symbol=EPICUSDT&interval=15m&startTime=1000&endTime=2000',base_url='https://cryptopilotai.up.railway.app')
+  self.assertEqual(r.status_code,404)
+  self.assertEqual(r.json['code'],'market_unavailable')
+  self.assertEqual(get.call_count,1)
+
+ def test_binance_backup_rejects_arbitrary_source_before_network(self):
+  with patch.object(receiver.requests,'get') as get:
+   r=receiver.app.test_client().get('/api/bitunix/kline?source=other&symbol=BTCUSDT&interval=15m&startTime=1000&endTime=2000',base_url='https://cryptopilotai.up.railway.app')
+  self.assertEqual(r.status_code,400);get.assert_not_called()
