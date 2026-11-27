@@ -65,13 +65,13 @@ function updateLivePnl() {
     if (markEl) markEl.textContent = mark ? fmtP(mark) : 'Sin cotización vigente';
     if (flEl) {
       flEl.textContent = mark
-        ? (flPct >= 0 ? '+' : '') + flPct.toFixed(2) + '% (' + (flUsdt >= 0 ? '+' : '-') + '$' + Math.abs(flUsdt).toFixed(2) + ')'
+        ? (flUsdt >= 0 ? '+' : '-') + '$' + Math.abs(flUsdt).toFixed(2)
         : '—';
       flEl.style.color = mark ? (flUsdt >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text3)';
     }
     if (netEl) {
       netEl.textContent = netPct !== null
-        ? (netPct >= 0 ? '+' : '') + netPct.toFixed(2) + '% / ' + (netUsdt >= 0 ? '+' : '-') + '$' + Math.abs(netUsdt).toFixed(2)
+        ? (netUsdt >= 0 ? '+' : '-') + '$' + Math.abs(netUsdt).toFixed(2)
         : '—';
       netEl.style.color = netPct !== null ? (netUsdt >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text3)';
     }
@@ -160,7 +160,7 @@ function renderOpen() {
 
       <div class="pos-pnl-detail">
         <div class="pos-pnl-col">
-          <div class="pos-pnl-col-label">Realizado en parciales (USDT)</div>
+          <div class="pos-pnl-col-label">Realizado (USDT)</div>
           <div class="pos-pnl-col-val" style="color:${accUsdt>=0?'var(--green)':'var(--red)'}">
             ${accUsdt>=0?'+':'-'}$${Math.abs(accUsdt).toFixed(2)}
           </div>
@@ -172,7 +172,7 @@ function renderOpen() {
         </div>
         <div style="width:1px;background:var(--border);flex-shrink:0;margin:0 12px"></div>
         <div class="pos-pnl-col">
-          <div class="pos-pnl-col-label">Neto: realizado + flotante</div>
+          <div class="pos-pnl-col-label">Neto total (USDT)</div>
           <div class="pos-pnl-col-val p-net" style="color:var(--text3)">—</div>
         </div>
       </div>
