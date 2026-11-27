@@ -445,6 +445,7 @@ def api_chart_signals():
     open_trades = query(
         """
         SELECT message_id AS id, pair AS symbol, side AS direction,
+               (SELECT split_part(s.signal_id,'_',2) FROM tv_signals s WHERE s.id=message_id) AS timeframe,
                display_margin_used AS margin_used, leverage,
                entry AS entry_price, stop_loss,
                tp1, tp2, tp3,

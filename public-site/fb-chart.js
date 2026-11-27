@@ -754,6 +754,8 @@ function fbDrawSignals() {
   // Merge + DEDUPLICATE
   const closed = (fbState.signals.closed||[]).map(s=>({...s, _open:false}));
   const open   = (fbState.signals.open||[]).map(s=>({...s, _open:true}));
+  // One projection per chart. Older open records retain their true ledger status.
+  const latestOpen=[...open].sort((a,b)=>Date.parse(b.opened_at)-Date.parse(a.opened_at)||Number(b.id)-Number(a.id))[0];
   const merged = [...closed, ...open];
 
   const seen = new Set();
@@ -813,7 +815,7 @@ function fbDrawSignals() {
     // Se dibuja en el overlay y se reposiciona cada frame → nunca se despega.
     const anchorPrice = anchorCandle ? (isL ? anchorCandle.low : anchorCandle.high) : entry;
     if (anchorCandle) zones.push({ type:'sigtag', time:tO, price:anchorPrice, isLong:isL,
-                 text: isL ? '▲ BUY · LONG' : '▼ SELL · SHORT' });
+                 text: (isL ? '▲ BUY · LONG' : '▼ SELL · SHORT')+(sig.timeframe?' · '+sig.timeframe:'') });
 
     // ══════════════════════════════════════════════════════════════════
     //  SEÑAL ABIERTA (EN EJECUCIÓN) — proyección completa de zonas.
@@ -822,6 +824,20 @@ function fbDrawSignals() {
     //  BREAK-EVEN: al tocar TP1 (hit_tp1 / be_active) la zona roja DESAPARECE
     //  y la entrada pasa a "ENTRY + BE" (el SL queda en el Entry).
     // ══════════════════════════════════════════════════════════════════
+    if (isOpen && sig!==latestOpen) {
+      // A later entry can belong to another timeframe: it does not prove closure.
+      // Remove only the old projection, without inventing an exit or changing P&L.
+      const nextTime=Math.floor(Date.parse(latestOpen.opened_at)/1000)+fbState.tzOff*3600;
+      const nextCandle=candleAt(nextTime);
+      if(nextCandle){
+        const partial=sig.pnl_accumulated;
+        const amount=partial!==null&&partial!==undefined?Number(partial):NaN;
+        zones.push({type:'tplbl',time:nextCandle.time,price:entry,dot:true,icon:'•',accent:'#FFD166',
+          line1:`${isL?'LONG':'SHORT'}${sig.timeframe?' '+sig.timeframe:''} · sin cierre registrado`,
+          line2:Number.isFinite(amount)?`Parciales: ${amount>=0?'+':''}$${amount.toFixed(2)} USDT · proyección oculta`:'Proyección anterior oculta'});
+      }
+      continue;
+    }
     if (isOpen) {
 
       // BREAK-EVEN: se activa al tocar TP1 (o si el backend ya marcó be_active)
@@ -902,8 +918,9 @@ function fbDrawSignals() {
 
       zones.push({type:'tplbl', time: anchorTime, price: anchorPrice, dot:true,
         icon: icon, accent: accent,
-        line1: `Cierre ${isL ? 'LONG' : 'SHORT'} · ${scenario}${sig.close_reason === 'BE_INFERRED' ? ' (inferido)' : ''}`,
-        line2: pctTxt});
+        line1: `CLOSE SIGNAL ${isL ? 'LONG' : 'SHORT'} · ${scenario}${sig.close_reason === 'BE_INFERRED' ? ' (inferido)' : ''}`,
+        line2: sig.final_profit_usdt!==null&&sig.final_profit_usdt!==undefined&&Number.isFinite(Number(sig.final_profit_usdt))
+          ?`${Number(sig.final_profit_usdt)>=0?'+':''}$${Number(sig.final_profit_usdt).toFixed(2)} USDT · ${pctTxt}`:pctTxt});
     }
   }
 
@@ -1271,7 +1288,7 @@ function fbOpenNetPct(sig, mark) {
 
 function fbUpdateDeltaPnl() {
   const open = (fbState.signals && fbState.signals.open) || [];
-  const sig  = open[0];
+  const sig  = [...open].sort((a,b)=>Date.parse(b.opened_at)-Date.parse(a.opened_at)||Number(b.id)-Number(a.id))[0];
   if (!sig || !fbState.data.length || !fbCandles) { fbState._dpnl = null; fbPositionDeltaPnl(); return; }
 
   const lastBar = fbState.data[fbState.data.length-1];
