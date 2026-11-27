@@ -3,7 +3,7 @@
    ─ Self-contained: manages its own state, WebSocket, and DOM elements.
 ════════════════════════════════════════════════════════════════════════════ */
 
-const FB_REST = 'https://onzafuturesproject-production.up.railway.app/api/public/candles';
+const FB_REST = '/api/public/candles';
 const FB_WS   = 'wss://fapi.bitunix.com/public/';
 const FB_WS_INTERVAL = {'1m':'1min','5m':'5min','15m':'15min','30m':'30min','1h':'60min','4h':'4h','1d':'1day'};
 const FB_CANDLES = 1800;
@@ -181,7 +181,7 @@ function fbCreateChart() {
   wm.id = 'fb-watermark';
   wm.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;pointer-events:none;z-index:1;';
   wm.innerHTML = `
-    <img src="cryptopilot-logo.png" alt="" style="width:460px;height:460px;object-fit:contain;opacity:0.06;" onerror="this.style.display='none'">
+    <img src="cryptopilot-logo.png" alt="" style="width:300px;height:300px;object-fit:contain;opacity:0.035;" onerror="this.style.display='none'">
     <div id="fb-wm-sym" style="font-family:'Inter',sans-serif;font-size:52px;font-weight:700;color:rgba(255,255,255,0.04);margin-top:6px;letter-spacing:-0.5px;"></div>
   `;
   c.appendChild(wm);

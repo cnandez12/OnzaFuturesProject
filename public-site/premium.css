@@ -40,3 +40,13 @@ body{background:#060d18}header{background:#060d18e8}.brand b{color:#a67bff}
 .stats .accent{color:#43ddf1}.positive,.live-card .level.hit{color:#41dfb5}.negative{color:#ff8c9c}
 .live-card .level.hit{background:#173f36;border-color:#256957}.chart-card .ct-tf.active{background:#628af8!important;color:#fff!important}
 .live-card p.positive{color:var(--green)}.live-card p.negative{color:var(--red)}.closed-highlight .access-label{color:var(--cyan)}
+
+/* Compact public chart: keep the selected operation readable without excess gutters. */
+main{max-width:1480px;padding-inline:24px}
+#grafico{padding-top:28px;padding-bottom:48px;scroll-margin-top:90px}
+#grafico>.section-top{margin-bottom:20px;gap:20px}
+#grafico h2{font-size:clamp(28px,2.6vw,38px)}
+#grafico .chart-intro{padding:14px 18px}
+#pg-chart.original-chart{height:clamp(480px,68vh,720px)}
+.fullscreen-chart #pg-chart.original-chart{height:auto;min-height:0;flex:1}
+@media(max-width:720px){main{padding-inline:16px}#grafico{padding-top:20px;scroll-margin-top:128px}#pg-chart.original-chart{height:500px}#grafico .chart-intro{padding:12px}}

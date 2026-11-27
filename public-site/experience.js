@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  const shell=document.getElementById('public-chart-shell');
  const statsMedia=window.matchMedia('(min-width:721px)');let statsChosen=false;
  function showStats(shown){shell.classList.toggle('show-chart-stats',shown);shell.classList.toggle('hide-chart-stats',!shown);document.getElementById('chart-stats-toggle').setAttribute('aria-pressed',String(shown));}
- showStats(statsMedia.matches);statsMedia.addEventListener('change',event=>{if(!statsChosen)showStats(event.matches);});
+ showStats(false);statsMedia.addEventListener('change',event=>{if(!statsChosen)showStats(event.matches);});
  document.getElementById('chart-stats-toggle').addEventListener('click',event=>{
   statsChosen=true;showStats(!shell.classList.contains('show-chart-stats'));
  });

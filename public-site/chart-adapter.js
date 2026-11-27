@@ -19,8 +19,10 @@ async function fetchJson(path){
  if(url.pathname==='/api/chart/signals'){
   const focused=publicFocusedSignal||(data?.signals||[]).find(r=>r.signal_id===selected);
   const protectedFocus=focused&&!publicPricesVisible(focused)&&(!symbol||pair(focused.symbol)===symbol);
-  return {closed:signals.filter(r=>r.closed&&(!focused?.closed||r.signal_id===focused.signal_id)).map(chartRecord),
-   open:protectedFocus||focused?.closed?[]:signals.filter(r=>!r.closed).map(chartRecord)};
+  // Only the selected trade owns overlays; symbol statistics still use all closed trades.
+  const visible=focused?signals.filter(r=>r.signal_id===focused.signal_id):signals;
+  return {closed:visible.filter(r=>r.closed).map(chartRecord),
+   open:protectedFocus?[]:visible.filter(r=>!r.closed).map(chartRecord)};
  }
  if(url.pathname==='/api/chart/poll')return {open_count:signals.filter(r=>!r.closed).length,
   last_closed:signals.filter(r=>r.closed).map(r=>r.closed_at).sort().at(-1)||null,
