@@ -32,6 +32,17 @@ class PublicWebsiteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, b'')
 
+    def test_cryptopilot_public_domain_does_not_request_dashboard_password(self):
+        # Railway may retain the old explicit variable during the domain migration.
+        with patch.dict('os.environ', {'PUBLIC_WEBSITE_HOSTS': 'trade-onzafutures.up.railway.app'}):
+            public = 'https://trade-cryptopilot.up.railway.app'
+            for path in ('/', '/app.js', '/cryptopilot-logo.png'):
+                response = self.get(path, base_url=public)
+                self.assertEqual(response.status_code, 200)
+                self.assertNotIn('WWW-Authenticate', response.headers)
+            self.assertEqual(self.get('/api/sim/open', base_url=public).status_code, 404)
+            self.assertEqual(self.get('/', base_url='https://cryptopilotai.up.railway.app').status_code, 401)
+
     def test_only_public_assets_are_served(self):
         for path in ('/app.js', '/onza-logo.png', '/vendor/lightweight-charts.js'):
             self.assertEqual(self.get(path, base_url=self.origin).status_code, 200)
