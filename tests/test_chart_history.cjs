@@ -14,6 +14,8 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
  assert.match(notice,/Bitunix/);assert.match(notice,/EPIC/);assert.equal(sockets,0);assert.equal(rendered,0);assert.equal(calls,2,'permanent rejection must not retry');
  context.fbState.symbol='BTCUSDT';context.fetch=async()=>({ok:true,json:async()=>[row,{...row,time:row.time-900000}]});
  await vm.runInContext('fbLoadData()',context);assert.equal(context.fbState.data.length,2);assert.equal(sockets,1);assert.equal(notice,'');
+ let emptyCalls=0;context.fetch=async()=>({ok:true,json:async()=>++emptyCalls===1?[]:[row]});
+ assert.equal((await vm.runInContext("fbHistoryChunk('/candles')",context)).length,1);assert.equal(emptyCalls,2);
  context.fetch=async()=>{throw Error('timeout')};await vm.runInContext('fbLoadData()',context);assert.match(notice,/No se pudo cargar/);assert.equal(sockets,1);
  let release;context.fbState.symbol='OLDUSDT';context.fetch=()=>new Promise(resolve=>release=resolve);
  // Only one chunk for the race case; the old response resolves after the new symbol.

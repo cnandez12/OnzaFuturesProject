@@ -273,7 +273,7 @@ async function fbHistoryChunk(url) {
       const body=await response.json();
       if(!response.ok){error=Object.assign(new Error(body.error||'Fallo al consultar velas'),{code:body.code});
         if(body.code==='market_unavailable')throw error;
-      }else if(Array.isArray(body))return body;
+      }else if(Array.isArray(body)){if(body.length||attempt===1)return body;}
       else error=new Error('Formato de velas inválido');
     }catch(exc){error=exc;if(exc.code==='market_unavailable')throw exc;}
   }
