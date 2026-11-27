@@ -63,7 +63,7 @@ function renderOverviewBalanceChart() {
 function renderOverviewOpenSignals() {
   const list = el('overview-open-list');
   if (!list) return;
-  set('overview-open-count', openPos.length + ' LIVE');
+  set('overview-open-count', openPos.length + ' ABIERTAS');
   if (!openPos.length) {
     list.innerHTML = '<div class="mission-open-empty"><div><strong>Sin señales abiertas</strong><br><span>El dashboard está sincronizado y esperando una nueva entrada.</span></div></div>';
     return;
@@ -76,19 +76,17 @@ function renderOverviewOpenSignals() {
     const mark = lastMarkFetchAt && Date.now()-lastMarkFetchAt < 20000 ? liveMarkPrices['BITUNIX:' + symbol] : null;
     const pnl = calcOpenPnl(p, mark);
     const accumulated = Number(p.pnl_accumulated || 0);
-    const target = p.tp2_filled ? Number(p.tp2) : p.tp1_filled ? Number(p.tp1) : null;
-    const highestPct = target ? (isLong ? target-Number(p.entry) : Number(p.entry)-target)/Number(p.entry)*Number(p.leverage)*100 : null;
-    const net = highestPct !== null ? highestPct * Number(p.margin_used)/100 : pnl && pnl.net !== null ? pnl.net : accumulated;
-    const netPct = highestPct !== null ? highestPct : pnl && pnl.netPct !== null ? pnl.netPct : (Number(p.margin_used) ? accumulated/Number(p.margin_used)*100 : 0);
+    const net = pnl?.net ?? null;
+    const netPct = pnl?.netPct ?? null;
     const tp1 = Boolean(p.tp1_filled), tp2 = Boolean(p.tp2_filled);
     const be = Boolean(p.be_active);
-    const state = tp2 ? 'Máximo TP2' : tp1 ? 'Máximo TP1' : 'Riesgo abierto';
+    const state = tp2 ? 'TP2 alcanzado' : tp1 ? 'TP1 alcanzado' : 'Riesgo abierto';
     const protect = be ? ' · BE activo' : '';
     return `<div class="mission-open-row" data-pair="${safePair}" onclick="fbOpenSymbol(this.dataset.pair)" title="Abrir ${safePair} en el chart">
       <div class="mission-open-main"><span class="mission-open-symbol">${safePair}</span><span class="mission-dir ${isLong?'long':'short'}">${isLong?'LONG':'SHORT'}</span></div>
-      <div class="mission-open-pnl" style="color:${net>=0?'var(--green)':'var(--red)'}">${netPct>=0?'+':''}${netPct.toFixed(2)}%</div>
+      <div class="mission-open-pnl" style="color:${net===null?'var(--text3)':net>=0?'var(--green)':'var(--red)'}">${netPct===null?'—':(netPct>=0?'+':'')+netPct.toFixed(2)+'%'}</div>
       <div class="mission-progress"><span class="${tp1?'hit':''}"></span><span class="${tp2?'hit':''}"></span><span></span></div>
-      <div class="mission-open-meta"><span>${state}${protect}</span><span>${mark ? 'Mark '+fmtP(mark) : 'Esperando mark price'}</span></div>
+      <div class="mission-open-meta"><span>${state}${protect} · Realizado $${accumulated.toFixed(2)}</span><span>${mark ? 'Mark '+fmtP(mark) : 'Sin cotización vigente'}</span></div>
     </div>`;
   }).join('');
 }

@@ -9,12 +9,15 @@ function updateOpenBadge() {
   b.style.display = openPos.length ? 'inline-flex' : 'none';
 }
 
+let markFetchRunning=false;
 async function fetchMarkPrices() {
+  if(markFetchRunning)return;
   if (!openPos.length) return;
   const symbols = [...new Set(openPos.map(p => (p.pair || '').replace('/', '').toUpperCase()))]
     .filter(s => /^[A-Z0-9]+USDT$/.test(s));
   if (!symbols.length) return;
   const nextPrices = {};
+  markFetchRunning=true;
   try {
     for (let i = 0; i < symbols.length; i += 40) {
       const response = await fetch('/api/bitunix/tickers?symbols=' + encodeURIComponent(symbols.slice(i, i + 40).join(',')));
@@ -32,7 +35,7 @@ async function fetchMarkPrices() {
     updateLivePnl();
   } catch (error) {
     console.warn('[live] mark fetch failed:', error);
-  }
+  } finally {markFetchRunning=false;}
 }
 
 function calcOpenPnl(p, markPrice) {
@@ -41,7 +44,7 @@ function calcOpenPnl(p, markPrice) {
 
 function updateLivePnl() {
   if (!openPos.length) return;
-  let tAcc = 0, tFl = 0, tMrg = 0, tNet = 0, missingPrice = false;
+  let tAcc = 0, tFl = 0, tMrg = 0, tNet = 0, missingPrice = false, quotedCount = 0;
   const priceFresh = lastMarkFetchAt && Date.now() - lastMarkFetchAt < 15000;
   openPos.forEach(p => {
     const sym  = (p.pair || '').replace('/', '');
@@ -52,14 +55,14 @@ function updateLivePnl() {
       netPct, accumulated: accUsdt, margin } = pnl;
     tAcc += accUsdt; tMrg += margin; tNet += netUsdt || 0;
     if (flUsdt === null) missingPrice = true;
-    else tFl += flUsdt;
+    else {tFl += flUsdt;quotedCount++;}
     const card = el('pos-' + p.id);
     if (!card) return;
     const markEl = card.querySelector('.p-mark');
     const flEl   = card.querySelector('.p-fl');
     const netEl  = card.querySelector('.p-net');
     const netBig = card.querySelector('.p-net-big');
-    if (markEl) markEl.textContent = mark ? fmtP(mark) : '—';
+    if (markEl) markEl.textContent = mark ? fmtP(mark) : 'Sin cotización vigente';
     if (flEl) {
       flEl.textContent = mark
         ? (flPct >= 0 ? '+' : '') + flPct.toFixed(2) + '% (' + (flUsdt >= 0 ? '+' : '-') + '$' + Math.abs(flUsdt).toFixed(2) + ')'
@@ -86,7 +89,9 @@ function updateLivePnl() {
   const tNetPct = tMrg ? (tNet / tMrg * 100) : 0;
   setLive('sum-accum', tAcc,   '$', 2, tMrg);
   if (missingPrice) {
-    set('sum-float', '—'); set('sum-net', '—'); set('sum-net-pct', 'Esperando precios vigentes');
+    if(quotedCount){setLive('sum-float',tFl,'$',2,tMrg);setLive('sum-net',tNet,'$',2,tMrg);}
+    else {set('sum-float','—');set('sum-net','—');}
+    set('sum-net-pct','Cotización parcial: '+quotedCount+'/'+openPos.length+' posiciones');
   } else {
     setLive('sum-float', tFl, '$', 2, tMrg);
     setLive('sum-net', tNet, '$', 2, tMrg);
@@ -97,7 +102,7 @@ function updateLivePnl() {
   set('sum-count-pos', openPos.length + ' posición' + (openPos.length > 1 ? 'es' : ''));
   if (typeof renderOverviewOpenSignals === 'function') renderOverviewOpenSignals();
   set('live-ts', lastMarkFetchAt
-    ? 'Último mark price del exchange de cada señal · ' + new Date(lastMarkFetchAt).toLocaleTimeString('es') + (priceFresh ? '' : ' · desactualizado')
+    ? quotedCount+'/'+openPos.length+' posiciones cotizadas · ' + new Date(lastMarkFetchAt).toLocaleTimeString('es') + (priceFresh ? '' : ' · desactualizado')
     : 'Esperando mark price de Bitunix');
 }
 
@@ -155,7 +160,7 @@ function renderOpen() {
 
       <div class="pos-pnl-detail">
         <div class="pos-pnl-col">
-          <div class="pos-pnl-col-label">Máximo TP (USDT)</div>
+          <div class="pos-pnl-col-label">Realizado en parciales (USDT)</div>
           <div class="pos-pnl-col-val" style="color:${accUsdt>=0?'var(--green)':'var(--red)'}">
             ${accUsdt>=0?'+':'-'}$${Math.abs(accUsdt).toFixed(2)}
           </div>
@@ -167,7 +172,7 @@ function renderOpen() {
         </div>
         <div style="width:1px;background:var(--border);flex-shrink:0;margin:0 12px"></div>
         <div class="pos-pnl-col">
-          <div class="pos-pnl-col-label">Resultado del escenario</div>
+          <div class="pos-pnl-col-label">Neto: realizado + flotante</div>
           <div class="pos-pnl-col-val p-net" style="color:var(--text3)">—</div>
         </div>
       </div>

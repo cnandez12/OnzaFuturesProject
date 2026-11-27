@@ -399,9 +399,9 @@
     <div class="live-strip-divider"></div>
     <div class="live-metric"><div class="live-metric-label">P&amp;L flotante ahora</div><div class="live-metric-val" id="sum-float">—</div><div class="live-metric-sub">Posición restante</div></div>
     <div class="live-strip-divider"></div>
-    <div class="live-metric"><div class="live-metric-label">NET total abierto</div><div class="live-metric-val" id="sum-net" style="font-size:22px">—</div><div class="live-metric-sub" id="sum-net-pct">Acumulado + flotante</div></div>
+    <div class="live-metric"><div class="live-metric-label">Neto cotizado</div><div class="live-metric-val" id="sum-net" style="font-size:22px">—</div><div class="live-metric-sub" id="sum-net-pct">Acumulado + flotante</div></div>
     <div class="live-strip-divider live-right"></div>
-    <div class="live-metric live-right"><div class="live-metric-label">Margen en juego</div><div class="live-metric-val" id="sum-margin">—</div><div class="live-metric-sub" id="sum-count-pos"></div></div>
+    <div class="live-metric live-right"><div class="live-metric-label">Margen inicial agregado</div><div class="live-metric-val" id="sum-margin">—</div><div class="live-metric-sub" id="sum-count-pos"></div></div>
   </div>
 
   <div class="pos-grid" id="open-list">
@@ -418,7 +418,7 @@
      PAGE: HISTORIAL
 ══════════════════════════════════════════════════════════════════════════ -->
 <section id="pg-history" class="page">
-  <header class="mission-head page-intro"><div><div class="mission-eyebrow">Registro de simulación sin BE</div><h1>Histórico de señales</h1><p>Cada cierre, TP y stop loss con su resultado teórico sin BE. Los tres escenarios están en Auditoría.</p></div></header>
+  <header class="mission-head page-intro"><div><div class="mission-eyebrow">Registro de simulación con BE</div><h1>Histórico de señales</h1><p>Cada cierre, TP y stop loss con su resultado teórico con parciales y BE. Los tres escenarios están en Auditoría.</p></div></header>
   <div class="period-bar" id="hist-period-bar">
     <span class="period-bar-label">Período:</span>
     <button class="period-btn active" data-period="7">Semana</button>
@@ -655,8 +655,8 @@
 <script src="/static/js/distributions.js"></script>
 <script src="/static/js/recent.js"></script>
 <script src="/static/js/simulator.js"></script>
-<script src="/static/js/open-positions.js?v=account-5000-1"></script>
-<script src="/static/js/mission-control.js?v=account-5000-1"></script>
+<script src="/static/js/open-positions.js?v=live-market-2"></script>
+<script src="/static/js/mission-control.js?v=live-market-2"></script>
 <script src="/static/js/history.js"></script>
 <script src="/static/js/curve.js"></script>
 <script src="/static/js/symbols.js"></script>

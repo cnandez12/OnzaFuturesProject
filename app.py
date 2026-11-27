@@ -46,6 +46,13 @@ def _bitunix_data(path: str, params: dict) -> list:
 
 def _bitunix_public(path: str, params: dict, ttl: float = 0):
     try:
+        if path == "tickers":
+            # A disabled market can reject an entire filtered request (code 20015).
+            # The catalogue is independent of those filters; cache once and select locally.
+            tickers = response_cache.get(("tickers", "catalogue"), ttl or TICKERS_TTL,
+                                         lambda: _bitunix_data("tickers", {}))
+            wanted = set(params.get("symbols", "").split(","))
+            return jsonify([row for row in tickers if row.get("symbol") in wanted])
         if ttl:
             key = (path, tuple(sorted(params.items())))
             return jsonify(response_cache.get(key, ttl, lambda: _bitunix_data(path, params)))

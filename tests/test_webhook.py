@@ -134,7 +134,7 @@ class WebhookTests(unittest.TestCase):
             repeated = self.client.get("/api/bitunix/tickers?symbols=BTCUSDT", auth=PANEL)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json[0]["markPrice"], "83000.1")
-        self.assertEqual(get.call_args.kwargs["params"], {"symbols": "BTCUSDT"})
+        self.assertEqual(get.call_args.kwargs["params"], {})
         # Varias pestañas pidiendo los mismos precios cuestan una sola consulta a Bitunix.
         self.assertEqual(repeated.json, response.json)
         self.assertEqual(get.call_count, 1)

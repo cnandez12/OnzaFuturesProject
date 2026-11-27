@@ -27,23 +27,23 @@ def public_market_marks(symbols):
         if cached and time.monotonic()-cached[0]<10:
             return cached[1],cached[2]
     marks={}
-    for start in range(0,len(symbols),40):
-        try:
-            response=requests.get('https://fapi.bitunix.com/api/v1/futures/market/tickers',
-                                  params={'symbols':','.join(symbols[start:start+40])},timeout=3)
-            response.raise_for_status()
-            body=response.json()
-            if body.get('code')!=0 or not isinstance(body.get('data'),list):
-                continue
+    try:
+        response=requests.get('https://fapi.bitunix.com/api/v1/futures/market/tickers',
+                              params={},timeout=4)
+        response.raise_for_status()
+        body=response.json()
+        if body.get('code')==0 and isinstance(body.get('data'),list):
             for ticker in body['data']:
+                if ticker.get('symbol') not in symbols:
+                    continue
                 try:
                     mark=float(ticker.get('markPrice') or ticker.get('lastPrice'))
                     if math.isfinite(mark) and mark>0:
                         marks[ticker['symbol']]=mark
                 except (TypeError,ValueError,KeyError):
                     continue
-        except (requests.RequestException,ValueError):
-            continue
+    except (requests.RequestException,ValueError):
+        pass
     as_of=datetime.now(timezone.utc).isoformat() if marks else None
     with _mark_lock:
         _mark_cache.clear()
@@ -62,8 +62,10 @@ def open_performance(row,marks):
         if not all(math.isfinite(v) for v in values) or min(mark,entry,margin,leverage)<=0:
             return None
         sign=1 if row['direction']=='LONG' else -1
-        result=realized+(mark-entry)/entry*leverage*margin*remaining*sign
-        return {'mark_price':mark,'pnl_usdt':round(result,2),'roi_pct':round(result/margin*100,4)}
+        floating=(mark-entry)/entry*leverage*margin*remaining*sign
+        result=realized+floating
+        return {'mark_price':mark,'pnl_usdt':round(result,2),'roi_pct':round(result/margin*100,4),
+                'realized_usdt':round(realized,2),'floating_usdt':round(floating,2)}
     except (KeyError,TypeError,ValueError,ZeroDivisionError):
         return None
 

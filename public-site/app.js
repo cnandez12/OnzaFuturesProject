@@ -30,7 +30,7 @@ function featuredRows(){if(!data)return [];const ids=data.featured_signal_ids||d
 function livePerformance(r,mark){
  if(!publicPricesVisible(r)||r.closed||!Number.isFinite(mark)||mark<=0||!(r.entry_price>0)||!(r.margin_used>0))return null;
  const pnl=(r.recorded_partial_pnl_usdt||0)+(mark-r.entry_price)/r.entry_price*r.leverage*r.margin_used*r.remaining_fraction*(r.direction==='LONG'?1:-1);
- return {pnl_usdt:pnl,roi_pct:pnl/r.margin_used*100};
+ return {pnl_usdt:pnl,roi_pct:pnl/r.margin_used*100,realized_usdt:r.recorded_partial_pnl_usdt||0,floating_usdt:pnl-(r.recorded_partial_pnl_usdt||0)};
 }
 function renderOpen(){if(!data)return;const rows=data.signals.filter(r=>!r.closed),grid=$('open-signals');grid.replaceChildren();$('live-count').textContent=rows.length;
  const featured=featuredRows(),ids=new Set(featured.map(r=>r.signal_id));
@@ -39,19 +39,21 @@ function renderOpen(){if(!data)return;const rows=data.signals.filter(r=>!r.close
  for(const r of ordered.slice(0,expanded?ordered.length:8)){const visible=publicPricesVisible(r),card=node('article',null,'live-card'+(visible?' preview-signal':' protected-signal')),head=node('div',null,'live-head');head.append(node('h3',cleanSymbol(r.symbol)),node('span',r.direction+' · '+r.timeframe,r.direction==='LONG'?'positive':'negative'));card.append(head);
  card.append(node('small',r.closed?'CERRADA · RESULTADO POSITIVO':visible?'ACTIVA · '+(r.featured_reason||'EJEMPLO PÚBLICO').toUpperCase():'ACTIVA · ACCESO EN LA APP', 'access-label'));
  const levels=node('div',null,'levels');for(let i=1;i<=3;i++)levels.append(node('span','TP'+i,i<=r.max_tp?'level hit':'level'));card.append(levels);
- const current=prices[pair(r.symbol)];if(r.closed){card.classList.add('closed-highlight');card.append(node('p','Cierre: '+date(r.closed_at)),node('p',exitName(r)),node('p','Resultado cerrado: '+money(r.pnl_usdt)+' · '+pct(r.roi_pct),r.pnl_usdt>=0?'positive':'negative'));}
- else if(visible){card.append(node('p','Entrada: '+r.entry_price+' · Precio actual: '+(current??r.open_performance?.mark_price??'No disponible')),
+ const quoteFresh=lastMarkFetchAt&&Date.now()-lastMarkFetchAt<15000,serverFresh=r.quote_as_of&&Date.now()-Date.parse(r.quote_as_of)<15000;
+ const current=quoteFresh?prices[pair(r.symbol)]:null;if(r.closed){card.classList.add('closed-highlight');card.append(node('p','Cierre: '+date(r.closed_at)),node('p',exitName(r)),node('p','Resultado cerrado: '+money(r.pnl_usdt)+' · '+pct(r.roi_pct),r.pnl_usdt>=0?'positive':'negative'));}
+ else if(visible){card.append(node('p','Entrada: '+r.entry_price+' · Precio mark: '+(current??(serverFresh?r.open_performance?.mark_price:null)??'No disponible')),
  node('p','Stop de referencia: '+(r.be_activated?r.be_stop_price:r.original_stop)),node('p','Resultado registrado: '+money(r.recorded_partial_pnl_usdt)));
- const mark=liveMarkPrices['BITUNIX:'+pair(r.symbol)]??r.open_performance?.mark_price;
- const result=livePerformance(r,mark)||r.open_performance;if(result)card.append(node('p','Resultado abierto: '+money(result.pnl_usdt)+' · '+pct(result.roi_pct),result.pnl_usdt>=0?'positive':'negative'));
+ const mark=(quoteFresh?liveMarkPrices['BITUNIX:'+pair(r.symbol)]:null)??(serverFresh?r.open_performance?.mark_price:null);
+ const result=livePerformance(r,mark)||(serverFresh?r.open_performance:null);if(result){card.append(node('p','Flotante del remanente: '+money(result.floating_usdt)),node('p','Total abierto: '+money(result.pnl_usdt)+' · '+pct(result.roi_pct),result.pnl_usdt>=0?'positive':'negative'));}
  else card.append(node('p','Rendimiento abierto pendiente de cotización.'));}
  else{card.append(node('div','↗','locked-icon'),node('p','Entrada, stop y objetivos reservados.','locked-copy'));const unlock=node('a','Consultar señal en la app ↗','unlock-link');unlock.href=data.app_url;unlock.target='_blank';unlock.rel='noopener';card.append(unlock);}
  const button=node('button',r.closed?'Ver resultado en el gráfico ↗':'Ver gráfico ↗','button');button.addEventListener('click',()=>choose(r.signal_id));card.append(button);grid.append(card);}
  if(!ordered.length)grid.append(node('p','No hay señales destacadas ni activas en este corte.'));
  if(ordered.length>8){const button=node('button',expanded?'Mostrar menos':'Ver todas las '+rows.length+' señales activas','button');button.addEventListener('click',()=>{expanded=!expanded;renderOpen();});grid.append(button);}
 }
-async function quote(){if(!data)return;const symbols=[...new Set(data.signals.filter(r=>!r.closed&&publicPricesVisible(r)).map(r=>pair(r.symbol)))];
- try{for(let i=0;i<symbols.length;i+=40){const ticks=await get('/tickers?symbols='+symbols.slice(i,i+40).join(','));for(const t of ticks){const v=Number(t.lastPrice??t.markPrice);if(Number.isFinite(v)&&v>0)prices[t.symbol]=v;const mark=Number(t.markPrice??t.lastPrice);if(Number.isFinite(mark)&&mark>0)liveMarkPrices["BITUNIX:"+t.symbol]=mark;lastMarkFetchAt=Date.now();}}}catch(_){}renderOpen();}
+let quoteInFlight=false;
+async function quote(){if(!data||quoteInFlight)return;quoteInFlight=true;const symbols=[...new Set(data.signals.filter(r=>!r.closed&&publicPricesVisible(r)).map(r=>pair(r.symbol)))];
+ try{for(let i=0;i<symbols.length;i+=40){const ticks=await get('/tickers?symbols='+symbols.slice(i,i+40).join(','));for(const t of ticks){const v=Number(t.markPrice??t.lastPrice);if(Number.isFinite(v)&&v>0)prices[t.symbol]=v;const mark=Number(t.markPrice??t.lastPrice);if(Number.isFinite(mark)&&mark>0)liveMarkPrices["BITUNIX:"+t.symbol]=mark;lastMarkFetchAt=Date.now();}}}catch(_){if(!lastMarkFetchAt||Date.now()-lastMarkFetchAt>=15000){prices={};liveMarkPrices={};}}finally{quoteInFlight=false;}renderOpen();}
 function choose(id){chartPinned=true;selected=id;$('signal-select').value=id;renderChart(true);history.replaceState(null,'','#grafico');$('public-chart-shell').scrollIntoView({behavior:'smooth',block:'start'});}
 function updatePublicChartDetails(r){
  $('chart-heading').replaceChildren(node('h3',cleanSymbol(r.symbol)),node('span',r.direction+' · '+r.timeframe),node('span',r.closed?exitName(r):'Abierta',r.closed?'':'positive'));
