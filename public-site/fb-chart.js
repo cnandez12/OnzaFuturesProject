@@ -172,7 +172,10 @@ function fbCreateChart() {
   fbChart.subscribeCrosshairMove(fbOnCrosshair);
 
   const ro = new ResizeObserver(() => {
-    if (fbChart) fbChart.applyOptions({ width:c.clientWidth, height:c.clientHeight });
+    if (fbChart) {
+      fbChart.applyOptions({ width:c.clientWidth, height:c.clientHeight });
+      centerPublicChart();
+    }
   });
   ro.observe(c);
 
