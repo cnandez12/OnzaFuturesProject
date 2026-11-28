@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 from audit_scenarios import MODES, evaluate, summarize
 from web_evidence import scenario_events
+from web_candle_reconciliation import supplement
 
 AUDIT_SQL = """SELECT e.signal_id, s.id IS NOT NULL AS signal_exists,
     s.id AS signal_pk, s.exchange, s.margin_used, s.be_activated_at,
@@ -64,8 +65,13 @@ def build_report(event_rows, *, mode, fallback_margin="20", filters=None, margin
             if risk_override is not None:
                 from presentation_config import risk_margin
                 margin = risk_margin(entry["payload"],risk_override)
-            scenarios = {key: evaluate(sid, applied, mode=key, margin=margin,
-                                      be_activated_at=meta.get("be_activated_at")) for key in sorted(MODES)}
+            _, market_reconstruction = supplement(sid,events,applied,mode)
+            if market_reconstruction:reconstruction=market_reconstruction
+            scenarios={}
+            for key in sorted(MODES):
+                selected_events,_=supplement(sid,events,applied,key)
+                scenarios[key]=evaluate(sid,selected_events,mode=key,margin=margin,
+                                        be_activated_at=meta.get("be_activated_at"))
         except (ValueError, KeyError, ArithmeticError) as exc:
             incidents.append({"signal_id": sid, "symbol": entry["payload"].get("symbol"),
                               "reason": "Registro incompleto o inconsistente: " + str(exc), "events": raw})
@@ -77,7 +83,7 @@ def build_report(event_rows, *, mode, fallback_margin="20", filters=None, margin
         day = entry["received_at"].astimezone(ZoneInfo("America/Bogota")).date()
         if start and day < start or end and day > end:
             continue
-        if status != "all" and baseline["closed"] != (status == "closed"):
+        if status != "all" and scenarios[mode]["closed"] != (status == "closed"):
             continue
         if search and search not in (sid + " " + baseline["symbol"] + " " + baseline["direction"] + " " + str(meta.get("exchange"))).upper():
             continue
@@ -117,5 +123,5 @@ def build_report(event_rows, *, mode, fallback_margin="20", filters=None, margin
             "policy": {"be": "TP1 activa automáticamente el stop en entrada sobre el remanente; se aplica solo en partial_be.",
                        "be_exit": "Una salida adversa después de TP1 simula BE en entrada. El evento no proporciona la hora exacta del cruce.",
                        "max_tp": "Proyección retrospectiva del 100% del margen al máximo TP registrado; sin TP usa el cierre original.",
-                       "population": "Filtros por fecha de entrada en Colombia. Las tres estrategias usan las mismas señales.",
+                       "population": "Filtros por fecha de entrada en Colombia. Las tres estrategias usan las mismas señales. Conciliaciones por velas se aplican solo al escenario con BE; los otros modos conservan las alertas registradas.",
                        "costs": "P&L bruto de simulación; no incluye comisiones, funding ni deslizamiento."}}

@@ -154,11 +154,16 @@ def rows_to_list(rows):
             d["integrity_note"]="Actualización de salida recibida pendiente de conciliación"
         if "margin_used" in d:
             d["risk_usdt"] = float(RISK_PER_TRADE)
+            if "final_profit_usdt" not in d:
+                from web_reconciliation import note_for_record
+                note=note_for_record(d.get("id"))
+                if note:d["reconstruction_note"]=note
         if "final_profit_usdt" in d:
             d["display_mode"] = "partial_be"
             if d.get("id",0)<0:
                 d["source"]="reconciled_alerts"
-                d["reconstruction_note"]="TP3 recibido; parciales faltantes reconstruidos a objetivos"
+                from web_reconciliation import note_for_record
+                d["reconstruction_note"]=note_for_record(d["id"]) or "Escenario reconstruido desde evidencias guardadas"
         for k, v in d.items():
             if hasattr(v, '__float__'):
                 d[k] = float(v)

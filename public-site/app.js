@@ -13,7 +13,7 @@ function historyRows(){const search=$('search').value.trim().toUpperCase(),from=
  return r.closed&&(!search||(r.symbol+' '+r.direction).includes(search))&&(!from||day>=from)&&(!to||day<=to);
 }).sort((a,b)=>b.closed_at.localeCompare(a.closed_at));}
 function renderHistory(){if(!data)return;const rows=historyRows(),body=$('history');body.replaceChildren();page=Math.max(0,Math.min(page,Math.max(0,Math.ceil(rows.length/10)-1)));
- for(const r of rows.slice(page*10,page*10+10)){const tr=node('tr'),asset=node('td');asset.append(node('strong',cleanSymbol(r.symbol)),node('small',r.direction+' · '+r.timeframe+(r.reconstruction?' · TP3 reconstruido':'')));tr.append(asset);
+ for(const r of rows.slice(page*10,page*10+10)){const tr=node('tr'),asset=node('td');asset.append(node('strong',cleanSymbol(r.symbol)),node('small',r.direction+' · '+r.timeframe+(r.reconstruction?' · Conciliado':'')));tr.append(asset);
  [date(r.received_at),r.max_tp?'TP'+r.max_tp:'Sin TP',exitName(r)].forEach(v=>tr.append(node('td',v)));
  tr.append(node('td',pct(r.roi_pct),r.roi_pct>=0?'positive':'negative'));const cell=node('td'),button=node('button','Ver recorrido ↗');button.addEventListener('click',()=>choose(r.signal_id));cell.append(button);tr.append(cell);body.append(tr);}
  if(!rows.length){const td=node('td','No hay cierres para estos filtros.');td.colSpan=6;body.append(node('tr'));body.lastChild.append(td);}

@@ -34,7 +34,7 @@ function auditDetails(signal) {
     box.append(auditNode('p',`${scenario.closed?scenario.close_reason:'Abierta'} · Resultado cerrado: ${auditMoney(scenario.pnl_usdt)} · ROI sobre margen: ${auditPercent(scenario.roi_pct)} · Remanente: ${auditPercent(scenario.remaining_fraction*100)} · ${auditQuality(scenario)}`));
     box.append(auditTable(['Tramo','% inicial','Cantidad','Precio de salida','P&L USDT','ROI / margen','Fecha Colombia','Base del cálculo'],
       scenario.legs.map(l=>[l.kind,auditPercent(l.fraction*100),l.quantity.toFixed(8),l.price,auditMoney(l.pnl_usdt),auditPercent(l.roi_pct),auditDate(l.at),
-        ({recorded_alert:'Precio guardado',received_pending_alert:'Alerta recibida pendiente',target_inferred_from_later_tp:'Objetivo inferido por TP posterior',tp1_rule_inferred:'Entrada por regla BE',price_observation:'Precio observado',highest_tp_hindsight:'TP máximo retrospectivo'})[l.basis] || l.basis])));
+        ({recorded_alert:'Precio guardado',market_candle_reference:'Vela Bitunix 1m · referencia',received_pending_alert:'Alerta recibida pendiente',target_inferred_from_later_tp:'Objetivo inferido por TP posterior',tp1_rule_inferred:'Entrada por regla BE',price_observation:'Precio observado',highest_tp_hindsight:'TP máximo retrospectivo'})[l.basis] || l.basis])));
   }
   box.append(auditNode('h3','Conciliación con el registro original'));
   box.append(auditNode('p',`Registro guardado: ${auditMoney(signal.recorded_pnl_usdt)} · Reconstrucción sin BE: ${auditMoney(signal.scenarios.partial_no_be.pnl_usdt)} · Diferencia: ${auditMoney(signal.reconciliation_difference_usdt)} · ${signal.reconciliation_status}`));
@@ -65,7 +65,7 @@ async function renderAudit() {
     ? 'TP1 realiza el 40% y activa automáticamente BE en entrada para el 60% restante. TP2 realiza otro 40%; tras TP2 queda el 20%. Una salida adversa simula el cierre del remanente en entrada.'
     :mode==='partial_no_be'?'TP1/TP2/TP3 realizan 40/40/20. El remanente sale al stop original o al cierre por señal opuesta; se descarta BE para esta simulación.'
     :'Proyección retrospectiva: 100% del margen al TP más alto de una operación cerrada; sin TP, al precio de cierre. Utiliza el máximo conocido al final, no una decisión anticipada.')+
-    ' Resultados brutos con margen histórico, sin comisiones, funding ni deslizamiento. Auditoría suma importes redondeados por señal; la barra lateral conserva el P&L global y redondea el total.';
+    ' Resultados brutos sin comisiones, funding ni deslizamiento. El modo con BE incorpora conciliaciones identificadas por velas de 1 minuto; los otros modos conservan las alertas registradas. Auditoría suma importes redondeados por señal; la barra lateral conserva el P&L global y redondea el total.';
   try {
     const data=await fetchJson('/api/audit/results?'+params);if(request!==auditRequest)return;
     auditData=data;summary.replaceChildren();const s=data.summary;

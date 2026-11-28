@@ -118,9 +118,9 @@ def evaluate(signal_id: str, events: list[dict], *, mode: str, margin,
                 price = _dec(event["payload"]["price"])
                 adverse = price <= entry if direction == "LONG" else price >= entry
                 if mode == "partial_be" and activated and adverse:
-                    exit_be(moment, inferred=True)
+                    exit_be(moment, inferred=event.get("basis")!="market_candle_reference")
                 else:
-                    add_leg(kind.upper(), price, remaining, moment)
+                    add_leg(kind.upper(), price, remaining, moment, event.get("basis","recorded_alert"))
                     close_reason, closed_at = kind.upper(), moment
                 break
         if mode == "partial_be" and remaining > 0 and tp1 and be_observed:

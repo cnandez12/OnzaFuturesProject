@@ -1,4 +1,4 @@
-"""Read-only synthetic web rows from received TP3 alerts. Never alters source tables."""
+"""Read-only web rows reconciled from alerts and versioned candle evidence."""
 import threading
 import time
 from audit_reporting import AUDIT_SQL, build_report
@@ -18,16 +18,22 @@ def recovered_rows(cur):
         report=build_report(cur.fetchall(),mode="partial_be",risk_override=RISK_PER_TRADE)
         records=[]
         for row in report["rows"]:
-            if not row["reconstruction"] or not row["closed"] or not row.get("signal_pk"):continue
+            if not row["reconstruction"] or not row.get("signal_pk"):continue
             targets=row["targets"];legs={l["kind"]:l for l in row["legs"]}
-            record={"id":-int(row["signal_pk"]),"symbol":row["symbol"].replace("USD.P","USDT"),
+            record={"id":-int(row["signal_pk"]),"signal_pk":int(row["signal_pk"]),"reconstruction_note":row["reconstruction"]["note"],"symbol":row["symbol"].replace("USD.P","USDT"),
                     "direction":row["direction"],"entry_price":row["entry_price"],"exit_price":row["exit_price"],
                     "stop_loss":row["original_stop"],"margin_used":row["margin_used"],"leverage":int(row["leverage"]),
                     "final_profit_usdt":row["pnl_usdt"],"final_profit_pct":row["roi_pct"],
-                    "close_reason":"TP3","opened_at":row["received_at"],"closed_at":row["closed_at"],"duration":"Reconstruido"}
+                    "close_reason":row["close_reason"],"opened_at":row["received_at"],"closed_at":row["closed_at"],"duration":"Reconstruido"}
             for i in (1,2,3):
                 leg=legs.get(f"TP{i}");record.update({f"tp{i}":targets[i-1],f"hit_tp{i}":bool(leg),
                      f"tp{i}_exit_price":leg["price"] if leg else None,f"tp{i}_profit_pct":leg["roi_pct"] if leg else None})
             records.append(record)
         _cache=(version,records)
         return records
+
+
+def note_for_record(record_id):
+    for row in _cache[1]:
+        if row["id"]==record_id or (not row["closed_at"] and row["signal_pk"]==record_id):return row["reconstruction_note"]
+    return None

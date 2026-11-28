@@ -4,7 +4,8 @@ from presentation_config import RISK_PER_TRADE
 
 
 def project_sql(sql, params, initial_balance, recovered=None):
-    recovered=recovered or []
+    adjustments=[r for r in (recovered or []) if not r.get("closed_at")]
+    recovered=[r for r in (recovered or []) if r.get("closed_at")]
     amount = str(RISK_PER_TRADE)
     if re.search(r"\bFROM trades\b",sql) and "pnl_accumulated" in sql:
         # Existing signal margins remain stored unchanged; scale only the returned row.
@@ -20,6 +21,16 @@ def project_sql(sql, params, initial_balance, recovered=None):
         if recovered:
             cte=cte.replace("FROM trades t JOIN tv_signals s ON s.id=t.message_id", "FROM trades t JOIN tv_signals s ON s.id=t.message_id WHERE t.message_id<>ALL(%s::bigint[])")
             params=([-int(r["id"]) for r in recovered],*params)
+        if adjustments:
+            from psycopg2.extras import Json
+            updates=[dict(signal_pk=r["signal_pk"],**{k:v for i in (1,2,3) for k,v in (
+                (f"tp{i}_filled",r[f"hit_tp{i}"]),(f"tp{i}_fill_price",r[f"tp{i}_exit_price"]))}) for r in adjustments]
+            cte=cte.replace("WITH presentation_open AS (","""WITH adjusted_open AS (
+              SELECT (jsonb_populate_record(NULL::trades,to_jsonb(raw)||CASE WHEN w IS NULL THEN '{}'::jsonb ELSE w END)).*
+              FROM trades raw LEFT JOIN jsonb_array_elements(%s::jsonb) w ON (w->>'signal_pk')::bigint=raw.message_id
+            ), presentation_open AS (""")
+            cte=cte.replace("FROM trades t JOIN tv_signals", "FROM adjusted_open t JOIN tv_signals")
+            params=(Json(updates),*params)
         return cte+sql,params
     if not re.search(r"\bsim_track_record\b",sql) or "final_profit" not in sql:
         return sql,params
@@ -45,7 +56,7 @@ def project_sql(sql, params, initial_balance, recovered=None):
     ), dashboard_results AS (
       SELECT (jsonb_populate_record(NULL::sim_track_record,to_jsonb(m)||jsonb_build_object(
         'margin_used',display_margin,'exit_price',display_exit,
-        'close_reason',CASE WHEN display_be THEN 'BE_INFERRED' ELSE close_reason END,
+        'close_reason',CASE WHEN display_be AND close_reason<>'BE_OBSERVED' THEN 'BE_INFERRED' ELSE close_reason END,
         'final_profit_pct',ROUND(display_return*100,4),'final_profit_usdt',display_usdt,
         'balance_before',%s+COALESCE(SUM(display_usdt) OVER(ORDER BY closed_at,id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING),0),
         'balance_after',%s+SUM(display_usdt) OVER(ORDER BY closed_at,id)
