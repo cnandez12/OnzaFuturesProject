@@ -55,3 +55,12 @@ class CandleReconciliationTests(unittest.TestCase):
   source=ledger("tp1","tp2");record=self.record(source,"tp2",102)
   row=self.report(source,record)["rows"][0]
   self.assertEqual([l["kind"] for l in row["legs"]],["TP1","TP2"]);self.assertEqual(row["remaining_fraction"],.2)
+
+ def test_later_source_updates_do_not_erase_verified_be(self):
+  from web_candle_reconciliation import entry_fingerprint
+  original=ledger("tp1");record=self.record(original,"sl",100,minute=3)
+  record.update(entry_fingerprint=entry_fingerprint(original),anchor_ids=[e["id"] for e in original],anchor_fingerprint=fingerprint(original))
+  later=ledger("tp1","tp2","tp3")
+  for i,e in enumerate(later[2:]):e["received_at"]=e["applied_at"]=original[0]["received_at"]+timedelta(minutes=6+i)
+  row=self.report(later,record)["rows"][0]
+  self.assertEqual(row["close_reason"],"BE_OBSERVED");self.assertEqual(row["pnl_usdt"],50)

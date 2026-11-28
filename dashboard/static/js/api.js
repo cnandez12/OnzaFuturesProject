@@ -55,14 +55,17 @@ async function loadAll() {
     if (o.status === 'fulfilled') lastKnownOpenState = pulse.value.open_state;
   }
   const failures = [h,s,o,sym,pulse].filter(x => x.status === 'rejected');
+  const integrity = pulse.status==='fulfilled' ? pulse.value.web_integrity : null;
+  const needsReview = integrity && integrity.status!=='ok';
   const reconstructed = trades.filter(t => t.source === 'reconstructed').length;
   const latestMargin = Number(stats.last_recorded_margin);
   const marginMismatch = false; // margin varies with stop distance under fixed-risk sizing
   showDataStatus(failures.length
     ? `Datos incompletos o desactualizados: ${failures.length} consultas fallaron. Última carga parcial ${new Date().toLocaleTimeString('es')}.`
     : `Escenarios independientes · base 10.000 USDT · riesgo 250 USDT al SL original (2,5% inicial) · 40/40/20 con BE · ${trades.length} cierres desde TradingView · actualizado ${new Date().toLocaleTimeString('es')}`
+      + (needsReview ? ` · REVISAR: ${integrity.new_incomplete_groups || 0} grupos nuevos incompletos; excluidos del P&L.` : '')
       + (marginMismatch ? ' · AVISO: margen configurado distinto del último cierre; P&L abierto estimado.' : ''),
-    failures.length > 0 || marginMismatch);
+    failures.length > 0 || marginMismatch || needsReview);
   if (failures.length) console.error('Dashboard data load failed:', failures.map(x => x.reason));
   btn.classList.remove('spinning');
   renderAll();

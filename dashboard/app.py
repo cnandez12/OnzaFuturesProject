@@ -280,11 +280,13 @@ def api_pulse():
         fetch_one=True,
     )
     if row:
+        from web_reconciliation import integrity_status
         return jsonify({
             "total":       int(row["total"] or 0),
             "last_closed": row["last_closed"].isoformat() if row["last_closed"] else None,
             "open_count":  int(row["open_count"] or 0),
             "open_state":  str(row["open_state"])+":"+str(row.get("latest_event_id","")),
+            "web_integrity": integrity_status(),
         })
     return jsonify({"error": "Database unavailable"}), 503
 

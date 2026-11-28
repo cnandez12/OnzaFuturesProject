@@ -5,6 +5,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from audit_scenarios import MODES, evaluate, summarize
+from web_history_integrity import describe_gap, summarize_integrity, is_archived
 from web_evidence import scenario_events
 from web_candle_reconciliation import supplement
 
@@ -50,11 +51,15 @@ def build_report(event_rows, *, mode, fallback_margin="20", filters=None, margin
     for sid, events in grouped.items():
         events.sort(key=lambda e: (e["received_at"], e["id"]))
         raw = [public_event(e) for e in events]
+        if is_archived(sid):
+            incidents.append({"signal_id":sid,"symbol":events[0]["payload"].get("symbol"),
+                              "reason":"Grupo archivado por solicitud; excluido de los resultados web", "events":raw,**describe_gap(sid,events)})
+            continue
         applied, reconstruction = scenario_events(events)
         entry = next((e for e in applied if e["event_type"] == "entry"), None)
         if entry is None or not events[0].get("signal_exists", True):
             incidents.append({"signal_id": sid, "symbol": events[0]["payload"].get("symbol"),
-                              "reason": "Sin entrada aplicada asociada; no se calcula P&L", "events": raw})
+                              "reason": "Sin entrada aplicada asociada; no se calcula P&L", "events": raw, **describe_gap(sid,events)})
             continue
         meta = entry
         margin = meta.get("margin_used") if meta.get("margin_used") is not None else fallback_margin
@@ -106,6 +111,8 @@ def build_report(event_rows, *, mode, fallback_margin="20", filters=None, margin
         rows.append(result)
         for key in MODES:
             comparison_rows[key].append(scenarios[key])
+    archived=[r for r in incidents if r.get("known_legacy")]
+    visible_incidents=[r for r in incidents if not r.get("known_legacy")]
     rows.sort(key=lambda r: (r["received_at"], r["signal_id"]), reverse=True)
     comparison = {key: summarize(value, key) for key, value in comparison_rows.items()}
     reconciled = [r for r in rows if r["reconciliation_status"] == "match"]
@@ -113,13 +120,14 @@ def build_report(event_rows, *, mode, fallback_margin="20", filters=None, margin
             "summary": comparison[mode], "comparison": comparison, "rows": rows,
             "coverage": {"events_total": len(event_rows), "states": dict(Counter(e.get("state", "applied") for e in event_rows)),
                          "signals_total": sum(any(e["event_type"] == "entry" and e.get("state", "applied") == "applied" for e in es) for es in grouped.values()),
-                         "incidents": len(incidents), "incident_events": sum(len(i["events"]) for i in incidents),
+                         "incidents": len(visible_incidents), "incident_events": sum(len(i["events"]) for i in visible_incidents),
+                         "archived_groups":len(archived),"archived_events":sum(len(i["events"]) for i in archived),
                          "selected_signals": len(rows)},
             "reconciliation": {"matched": len(reconciled), "mismatched": sum(r["reconciliation_status"] == "mismatch" for r in rows),
                                "missing": sum(r["reconciliation_status"] == "missing_record" for r in rows),
                                "reconstructed":sum(bool(r["reconstruction"]) for r in rows),
                                "difference_usdt": round(sum(r["reconciliation_difference_usdt"] or 0 for r in rows), 2)},
-            "incidents": incidents,
+            "incidents": visible_incidents, "archive":{"groups":len(archived),"events":sum(len(i["events"]) for i in archived),"excluded_from_pnl":True}, "integrity":summarize_integrity(rows,incidents),
             "policy": {"be": "TP1 activa automáticamente el stop en entrada sobre el remanente; se aplica solo en partial_be.",
                        "be_exit": "Una salida adversa después de TP1 simula BE en entrada. El evento no proporciona la hora exacta del cruce.",
                        "max_tp": "Proyección retrospectiva del 100% del margen al máximo TP registrado; sin TP usa el cierre original.",

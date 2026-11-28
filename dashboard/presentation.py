@@ -1,12 +1,14 @@
 """SQL projections for web presentation only. No updates or delivery calls."""
 import re
 from presentation_config import RISK_PER_TRADE
+from web_history_integrity import archived_ids
 
 
 def project_sql(sql, params, initial_balance, recovered=None):
     adjustments=[r for r in (recovered or []) if not r.get("closed_at")]
     recovered=[r for r in (recovered or []) if r.get("closed_at")]
     amount = str(RISK_PER_TRADE)
+    excluded=archived_ids()
     if re.search(r"\bFROM trades\b",sql) and "pnl_accumulated" in sql:
         # Existing signal margins remain stored unchanged; scale only the returned row.
         cte = f"""WITH presentation_open AS (
@@ -15,12 +17,13 @@ def project_sql(sql, params, initial_balance, recovered=None):
             'be_active',COALESCE(t.tp1_filled,FALSE),
             'current_sl',CASE WHEN t.tp1_filled THEN t.entry ELSE t.stop_loss END
           ))).*,{amount}*t.entry::numeric/(NULLIF(ABS(t.entry::numeric-t.stop_loss::numeric),0)*t.leverage) AS display_margin_used
-          FROM trades t JOIN tv_signals s ON s.id=t.message_id
+          FROM trades t JOIN tv_signals s ON s.id=t.message_id WHERE NOT(s.signal_id=ANY(%s::text[]))
         ) """
         sql = re.sub(r"\bFROM trades\b", "FROM presentation_open trades",sql)
+        params=(excluded,*params)
         if recovered:
-            cte=cte.replace("FROM trades t JOIN tv_signals s ON s.id=t.message_id", "FROM trades t JOIN tv_signals s ON s.id=t.message_id WHERE t.message_id<>ALL(%s::bigint[])")
-            params=([-int(r["id"]) for r in recovered],*params)
+            cte=cte.replace("WHERE NOT(s.signal_id=ANY(%s::text[]))", "WHERE NOT(s.signal_id=ANY(%s::text[])) AND t.message_id<>ALL(%s::bigint[])")
+            params=(excluded,[-int(r["id"]) for r in recovered],*params[1:])
         if adjustments:
             from psycopg2.extras import Json
             updates=[dict(signal_pk=r["signal_pk"],**{k:v for i in (1,2,3) for k,v in (
@@ -40,7 +43,10 @@ def project_sql(sql, params, initial_balance, recovered=None):
           (CASE WHEN direction='LONG' THEN exit_price<=entry_price ELSE exit_price>=entry_price END) AS display_be,
         1-CASE WHEN hit_tp1 THEN .4 ELSE 0 END-CASE WHEN hit_tp2 THEN .4 ELSE 0 END-
           CASE WHEN hit_tp3 THEN .2 ELSE 0 END AS remaining
-      FROM sim_track_record r
+      FROM sim_track_record r WHERE NOT EXISTS (
+        SELECT 1 FROM tv_signals excluded_signal JOIN trades original_trade ON original_trade.message_id=excluded_signal.id
+        WHERE excluded_signal.signal_id=ANY(%s::text[]) AND original_trade.date=r.opened_at AND original_trade.pair=r.symbol
+          AND NULLIF(original_trade.entry,'')::numeric=r.entry_price)
     ), valued AS (
       SELECT p.*,CASE WHEN display_be THEN entry_price ELSE exit_price END AS display_exit,
         (
@@ -67,7 +73,11 @@ def project_sql(sql, params, initial_balance, recovered=None):
     extra=()
     if recovered:
         from psycopg2.extras import Json
-        cte=cte.replace("WITH priced AS (","WITH web_records AS (SELECT * FROM sim_track_record UNION ALL SELECT * FROM jsonb_populate_recordset(NULL::sim_track_record,%s::jsonb)), priced AS (")
         cte=cte.replace("FROM sim_track_record r", "FROM web_records r")
+        cte=cte.replace("WITH priced AS (", """WITH web_patch AS (
+          SELECT * FROM jsonb_populate_recordset(NULL::sim_track_record,%s::jsonb)), web_records AS (
+          SELECT r.* FROM sim_track_record r WHERE NOT EXISTS (SELECT 1 FROM web_patch w
+            WHERE w.symbol=r.symbol AND w.direction=r.direction AND w.opened_at=r.opened_at AND w.entry_price=r.entry_price)
+          UNION ALL SELECT * FROM web_patch), priced AS (""")
         extra=(Json(recovered),)
-    return cte+re.sub(r"\bsim_track_record\b","dashboard_results",sql),(*extra,initial_balance,initial_balance,*params)
+    return cte+re.sub(r"\bsim_track_record\b","dashboard_results",sql),(*extra,excluded,initial_balance,initial_balance,*params)

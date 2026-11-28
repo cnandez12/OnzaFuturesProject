@@ -6,16 +6,19 @@ from presentation_config import RISK_PER_TRADE
 
 _lock=threading.Lock()
 _cache=(None,[])
+_integrity={}
 
 
 def recovered_rows(cur):
-    global _cache
+    global _cache,_integrity
     with _lock:
         cur.execute("SELECT COALESCE(MAX(id),0) AS latest,COUNT(*) FILTER(WHERE state='pending') AS pending,MAX(applied_at) AS applied FROM tv_events")
         version=dict(cur.fetchone())
         if version==_cache[0]:return _cache[1]
         cur.execute(AUDIT_SQL)
         report=build_report(cur.fetchall(),mode="partial_be",risk_override=RISK_PER_TRADE)
+        _integrity=report["integrity"]
+        if report["integrity"]["math_errors"]:raise RuntimeError("La verificación matemática del histórico requiere revisión")
         records=[]
         for row in report["rows"]:
             if not row["reconstruction"] or not row.get("signal_pk"):continue
@@ -37,3 +40,7 @@ def note_for_record(record_id):
     for row in _cache[1]:
         if row["id"]==record_id or (not row["closed_at"] and row["signal_pk"]==record_id):return row["reconstruction_note"]
     return None
+
+
+def integrity_status():
+    with _lock:return dict(_integrity)

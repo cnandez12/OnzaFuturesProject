@@ -17,11 +17,26 @@ def fingerprint(events):
                        {k:p[k] for k in fields if k in p},p.get("price")])
     return hashlib.sha256(json.dumps(values,sort_keys=True,default=str,separators=(",",":")).encode()).hexdigest()
 
+def entry_fingerprint(events):
+    entry=[e for e in events if e["event_type"]=="entry" and e.get("state","applied")=="applied"]
+    return fingerprint(entry) if len(entry)==1 else None
+
+def valid_record(record,events):
+    if not record:return False
+    if not record.get("entry_fingerprint"):return record.get("fingerprint")==fingerprint(events)
+    anchors=[e for e in events if e["id"] in record.get("anchor_ids",[])]
+    return (record["entry_fingerprint"]==entry_fingerprint(events) and
+            len(anchors)==len(record.get("anchor_ids",[])) and
+            fingerprint(anchors)==record.get("anchor_fingerprint"))
+
 def supplement(signal_id,events,applied,mode):
     record=EVIDENCE.get(signal_id)
-    if mode!="partial_be" or not record or record["fingerprint"]!=fingerprint(events):return applied,None
-    if any(e["event_type"] in ("sl","close","tp3") and e.get("state","applied")=="applied" for e in events):return applied,None
+    if mode!="partial_be" or not valid_record(record,events):return applied,None
     if not record.get("observations"):return applied,None
+    closing=next((o for o in record["observations"] if o["kind"] in ("sl","close","tp3")),None)
+    close_at=(closing["bar"]["time"]+60000)/1000 if closing else float("inf")
+    if any(e["event_type"] in ("sl","close","tp3") and e.get("state","applied")=="applied" and
+           (e.get("applied_at") or e["received_at"]).timestamp()<=close_at for e in events):return applied,None
     initial=next(e for e in applied if e["event_type"]=="entry")
     extra=[]
     for i,o in enumerate(record["observations"]):

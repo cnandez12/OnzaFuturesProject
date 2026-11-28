@@ -95,6 +95,7 @@ def project_public(report, capital, marks=None, quote_as_of=None, market_states=
                'exit_price','max_tp','be_activated','be_stop_price','be_activated_at','closed','close_reason',
                'received_at','closed_at','pnl_usdt','roi_pct','recorded_partial_pnl_usdt','legs',
                'remaining_fraction','leverage','margin_used','risk_usdt','sizing_mode','roi_basis','reconstruction','integrity_note')
+    if report.get('integrity',{}).get('math_errors'):raise RuntimeError('La verificación matemática del histórico requiere revisión')
     featured,performance=select_featured(report['rows'],marks or {},market_states=market_states)
     preview_ids={r['signal_id'] for r in featured if not r['closed']}
     featured_ranks={r['signal_id']:i for i,r in enumerate(featured)}
@@ -105,7 +106,7 @@ def project_public(report, capital, marks=None, quote_as_of=None, market_states=
     for row in report['rows']:
         visible = row['closed'] or row['signal_id'] in preview_ids
         public_row = {key: row[key] for key in allowed if key in row and (visible or key not in sensitive)}
-        if public_row.get('reconstruction'):public_row['reconstruction']={'note':row['reconstruction']['note'],'inferred_targets':row['reconstruction']['inferred_targets']}
+        if public_row.get('reconstruction'):public_row['reconstruction']={k:row['reconstruction'][k] for k in ('note','inferred_targets','as_of','precision') if k in row['reconstruction']}
         if not row['closed']:public_row['integrity_note']=quote_issue(row,(marks or {}).get(market_symbol(row['symbol'])))
         public_row['live_eligible']=market_states.get(canonical(row['symbol']),{}).get('visible',canonical(row['symbol']) not in LIVE_EXCLUDED)
         public_row['prices_visible'] = visible
@@ -125,6 +126,7 @@ def project_public(report, capital, marks=None, quote_as_of=None, market_states=
             'summary':summary,'signals':signals,
             'live_counts':{'visible_open':sum(not r['closed'] and r['live_eligible'] for r in signals),
                            'hidden_open':sum(not r['closed'] and not r['live_eligible'] for r in signals)},
+            'validation':{'math_checked':report.get('integrity',{}).get('math_checked'),'status':report.get('integrity',{}).get('status','unknown'),'new_incomplete_groups':report.get('integrity',{}).get('new_incomplete_groups',0)},
             'active_preview_limit':4,'price_visibility_version':2,
             'featured_signal_ids':[r['signal_id'] for r in featured],
             'featured_policy':'Selección de destacadas: activas con TP2, TP1 y después rendimiento abierto positivo. Si faltan, se completa con cierres positivos recientes. No representa el registro completo.',

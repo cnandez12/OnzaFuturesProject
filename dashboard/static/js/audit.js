@@ -79,8 +79,8 @@ async function renderAudit() {
     auditCard(summary,'Parciales de abiertas · USDT',mode==='max_tp'?'No vende parciales':auditMoney(s.open_partial_pnl_usdt));
     auditCard(summary,'TP1 / TP2 / TP3 alcanzados',`${s.reached_counts['1']} / ${s.reached_counts['2']} / ${s.reached_counts['3']}`);
     auditCard(summary,'BE habilitado / salidas BE simuladas',`${s.be_activated} / ${s.inferred}`);
-    const coverage=data.coverage,r=data.reconciliation;
-    document.getElementById('audit-coverage').textContent=`Cobertura global: ${coverage.events_total} eventos guardados · ${Object.entries(coverage.states).map(([k,v])=>`${k}: ${v}`).join(' · ')} · ${coverage.incidents} incidencias (${coverage.incident_events} eventos). Selección: ${coverage.selected_signals} señales. Conciliación del stop original: ${r.matched} coinciden · ${r.mismatched} diferencias · ${r.missing} sin cierre guardado · ${r.reconstructed || 0} escenarios conciliados · diferencia ${auditMoney(r.difference_usdt)}. Fechas de entrada en Colombia.`;
+    const coverage=data.coverage,r=data.reconciliation,integrity=data.integrity;
+    document.getElementById('audit-coverage').textContent=`Cobertura global: ${coverage.events_total} eventos guardados · ${Object.entries(coverage.states).map(([k,v])=>`${k}: ${v}`).join(' · ')} · ${coverage.incidents} incidencias pendientes (${coverage.incident_events} eventos) · ${coverage.archived_groups || 0} grupos incompletos archivados, fuera del P&L. Selección: ${coverage.selected_signals} señales. Conciliación del stop original: ${r.matched} coinciden · ${r.mismatched} diferencias · ${r.missing} sin cierre guardado · ${r.reconstructed || 0} escenarios conciliados · diferencia ${auditMoney(r.difference_usdt)}. Fechas de entrada en Colombia.`;
     const compare=document.getElementById('audit-comparison');compare.replaceChildren(auditTable(
       ['Estrategia','Cierres','P&L bruto','Win rate','PF','Drawdown USDT','Peor operación','Ganadas / perdidas / neutras'],
       Object.keys(auditNames).map(key=>[key,data.comparison[key]]).map(([key,v])=>[auditNames[key],v.closed,auditMoney(v.pnl_usdt),auditPercent(v.win_rate),auditPF(v),auditMoney(v.max_drawdown_usdt),auditMoney(v.worst_trade_usdt),`${v.wins} / ${v.losses} / ${v.flat}`])));
@@ -95,15 +95,17 @@ async function renderAudit() {
        `${auditMoney(signal.margin_used)} · ${signal.leverage}x`,signal.max_tp?`TP${signal.max_tp}`:'Ninguno',
        signal.be_activated?`Activo desde TP1 · ${signal.be_stop_price}${signal.be_applied?' · aplicado':' · omitido en este modo'}`:'Inactivo',
        signal.closed?signal.close_reason:'Abierta',auditMoney(signal.pnl_usdt),auditMoney(signal.recorded_partial_pnl_usdt),
-       signal.reconciliation_status==='reconstructed'?'Reconstruido desde alertas':signal.reconciliation_status==='match'?'Coincide':signal.reconciliation_status==='open'?'Abierta':signal.reconciliation_status==='missing_record'?'Sin registro':auditMoney(signal.reconciliation_difference_usdt)
+       signal.reconciliation_status==='reconstructed'?'Conciliado desde evidencias':signal.reconciliation_status==='match'?'Coincide':signal.reconciliation_status==='open'?'Abierta':signal.reconciliation_status==='missing_record'?'Sin registro':auditMoney(signal.reconciliation_difference_usdt)
       ].forEach(value=>auditCell(tr,value));body.append(tr);
       const detailRow=auditNode('tr'),cell=auditCell(detailRow,null);cell.colSpan=9;cell.append(auditDetails(signal));body.append(detailRow);
     }
     if(!data.rows.length){const tr=auditNode('tr'),td=auditCell(tr,'Sin señales para estos filtros.');td.colSpan=9;body.append(tr);}
     const incidents=document.getElementById('audit-incidents');incidents.replaceChildren();
-    if(!data.incidents.length)incidents.append(auditNode('p','No hay eventos excluidos por ausencia o inconsistencia de entrada.'));
+    if(!data.incidents.length)incidents.append(auditNode('p','Sin incidencias pendientes en el corte actual.'));
+    if(integrity)incidents.append(auditNode('p',`Validación automática: ${integrity.math_checked} escenarios comprobados · ${integrity.math_errors.length} errores matemáticos · ${integrity.new_incomplete_groups} grupos nuevos incompletos.`));
     for(const incident of data.incidents) {
       const detail=auditNode('details',null,'audit-detail');detail.append(auditNode('summary',`${incident.signal_id} · ${incident.events.length} eventos · ${incident.reason}`));
+      if(incident.classification)detail.append(auditNode('p',incident.classification+' · Faltan: '+incident.missing_fields.join(', ')+'. '+incident.required_evidence));
       detail.append(auditTable(['ID','Evento','Estado','Precio','Recibido Colombia','Telegram'],incident.events.map(e=>[e.id,e.type,e.state,e.price,auditDate(e.received_at),e.telegram_status])));incidents.append(detail);
     }
     status.textContent=`${data.rows.length} señales · corte ${auditDate(data.as_of)} · Colombia`;

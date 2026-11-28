@@ -1,0 +1,157 @@
+{
+  "AAVEUSD.P_15M_1790823600000": {
+    "origin_bar_utc": "2026-10-01T03:00:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-02 00:41:13.163747+00:00"
+  },
+  "AAVEUSD.P_1H_1790665200000": {
+    "origin_bar_utc": "2026-09-29T07:00:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-02 04:40:29.162415+00:00"
+  },
+  "APEUSD.P_1H_1790607600000": {
+    "origin_bar_utc": "2026-09-28T15:00:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-02 10:40:07.521782+00:00"
+  },
+  "APEUSD.P_1H_1793890800000": {
+    "origin_bar_utc": "2026-11-05T15:00:00+00:00",
+    "classification": "Posterior al inicio del historico",
+    "first_received_utc": "2026-11-08 16:46:40.472619+00:00"
+  },
+  "APEUSD.P_30M_1790595000000": {
+    "origin_bar_utc": "2026-09-28T11:30:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-02 08:30:12.899104+00:00"
+  },
+  "APTUSD.P_30M_1790580600000": {
+    "origin_bar_utc": "2026-09-28T07:30:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-01 15:08:30.595099+00:00"
+  },
+  "ARBUSD.P_15M_1790841600000": {
+    "origin_bar_utc": "2026-10-01T08:00:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-02 04:21:06.576236+00:00"
+  },
+  "ARBUSD.P_1H_1790604000000": {
+    "origin_bar_utc": "2026-09-28T14:00:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-07 02:01:42.536070+00:00"
+  },
+  "ASTERUSD.P_1H_1790730000000": {
+    "origin_bar_utc": "2026-09-30T01:00:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-02 18:39:15.784091+00:00"
+  },
+  "ATOMUSD.P_15M_1790566200000": {
+    "origin_bar_utc": "2026-09-28T03:30:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-02 04:45:16.188553+00:00"
+  },
+  "ATOMUSD.P_15M_1793890800000": {
+    "origin_bar_utc": "2026-11-05T15:00:00+00:00",
+    "classification": "Posterior al inicio del historico",
+    "first_received_utc": "2026-11-05 15:24:23.056921+00:00"
+  },
+  "AVAXUSD.P_15M_1790777700000": {
+    "origin_bar_utc": "2026-09-30T14:15:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-02 04:45:05.814788+00:00"
+  },
+  "AVAXUSD.P_30M_1790667000000": {
+    "origin_bar_utc": "2026-09-29T07:30:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-02 18:47:33.691351+00:00"
+  },
+  "BTCUSD.P_30M_1790771400000": {
+    "origin_bar_utc": "2026-09-30T12:30:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-02 12:30:33.964489+00:00"
+  },
+  "DOTUSD.P_30M_1790760600000": {
+    "origin_bar_utc": "2026-09-30T09:30:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-01 12:57:53.070961+00:00"
+  },
+  "DOTUSD.P_30M_1793890800000": {
+    "origin_bar_utc": "2026-11-05T15:00:00+00:00",
+    "classification": "Posterior al inicio del historico",
+    "first_received_utc": "2026-11-08 21:55:54.058333+00:00"
+  },
+  "FETUSD.P_15M_1790772300000": {
+    "origin_bar_utc": "2026-09-30T12:45:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-02 18:30:19.651281+00:00"
+  },
+  "HYPEUSD.P_15M_1794320100000": {
+    "origin_bar_utc": "2026-11-10T14:15:00+00:00",
+    "classification": "Posterior al inicio del historico",
+    "first_received_utc": "2026-11-10 15:02:03.439174+00:00"
+  },
+  "ICPUSD.P_15M_1790839800000": {
+    "origin_bar_utc": "2026-10-01T07:30:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-02 18:40:27.484883+00:00"
+  },
+  "LTCUSD.P_30M_1790604000000": {
+    "origin_bar_utc": "2026-09-28T14:00:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-02 01:00:22.807175+00:00"
+  },
+  "ONDOUSD.P_1H_1793894400000": {
+    "origin_bar_utc": "2026-11-05T16:00:00+00:00",
+    "classification": "Posterior al inicio del historico",
+    "first_received_utc": "2026-11-08 04:42:51.466574+00:00"
+  },
+  "ONDOUSD.P_30M_1793890800000": {
+    "origin_bar_utc": "2026-11-05T15:00:00+00:00",
+    "classification": "Posterior al inicio del historico",
+    "first_received_utc": "2026-11-08 21:55:41.737635+00:00"
+  },
+  "SOLUSD.P_1H_1790334000000": {
+    "origin_bar_utc": "2026-09-25T11:00:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-07 21:43:19.717282+00:00"
+  },
+  "SUIUSD.P_30M_1793890800000": {
+    "origin_bar_utc": "2026-11-05T15:00:00+00:00",
+    "classification": "Posterior al inicio del historico",
+    "first_received_utc": "2026-11-12 13:10:23.853336+00:00"
+  },
+  "TRXUSD.P_1H_1790852400000": {
+    "origin_bar_utc": "2026-10-01T11:00:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-12 21:44:31.357968+00:00"
+  },
+  "VELVETUSD.P_30M_1790841600000": {
+    "origin_bar_utc": "2026-10-01T08:00:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-02 03:04:35.414317+00:00"
+  },
+  "VELVETUSD.P_30M_1794153600000": {
+    "origin_bar_utc": "2026-11-08T16:00:00+00:00",
+    "classification": "Posterior al inicio del historico",
+    "first_received_utc": "2026-11-08 16:54:03.656932+00:00"
+  },
+  "XLMUSD.P_30M_1790598600000": {
+    "origin_bar_utc": "2026-09-28T12:30:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-02 19:00:05.015114+00:00"
+  },
+  "XPLUSD.P_1H_1790604000000": {
+    "origin_bar_utc": "2026-09-28T14:00:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-07 02:01:07.328396+00:00"
+  },
+  "XPLUSD.P_30M_1790521200000": {
+    "origin_bar_utc": "2026-09-27T15:00:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-08 17:09:48.457397+00:00"
+  },
+  "ZENUSD.P_30M_1790767800000": {
+    "origin_bar_utc": "2026-09-30T11:30:00+00:00",
+    "classification": "Antes del inicio del historico",
+    "first_received_utc": "2026-10-02 18:20:19.947059+00:00"
+  }
+}
