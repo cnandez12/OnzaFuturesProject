@@ -29,7 +29,9 @@ def supplement(signal_id,events,applied,mode):
         extra.append(dict(initial,id=1000000000+i,event_type=o["kind"],typeSignal=o["kind"],received_at=at,applied_at=None,
                           payload=dict(initial["payload"],price=o["price"]),basis="market_candle_reference"))
     ambiguous=sum(bool(o.get("ambiguous")) for o in record["observations"])
-    return [*applied,*extra],{"kind":"market_candles","source":record.get("source","Bitunix Futures LAST_PRICE"),"as_of":record["as_of"],
+    replaced={e["event_type"] for e in extra}
+    retained=[e for e in applied if e["event_type"] not in replaced]
+    return [*retained,*extra],{"kind":"market_candles","source":record.get("source","Bitunix Futures LAST_PRICE"),"as_of":record["as_of"],
         "received_pending_event_ids":[],"inferred_targets":[o["kind"] for o in record["observations"] if o["kind"].startswith("tp")],
         "precision":"1m","ambiguous_candles":ambiguous,
-        "note":"Escenario conciliado con velas de 1 minuto de Bitunix desde el minuto completo posterior a la última alerta aplicada. Hora aproximada al fin de vela; stop prioritario ante cruce simultáneo. No confirma ejecución del broker."}
+        "note":"Escenario conciliado con velas de 1 minuto de Bitunix desde el minuto completo posterior a TP1 (o a la entrada si aún no había TP1). Hora aproximada al fin de vela; stop prioritario ante cruce simultáneo. No confirma ejecución del broker."}

@@ -45,3 +45,13 @@ class CandleReconciliationTests(unittest.TestCase):
  def test_already_recorded_terminal_is_not_duplicated(self):
   source=ledger("tp1","sl");record=self.record(source,"sl",100)
   self.assertIsNone(self.report(source,record)["rows"][0]["reconstruction"])
+
+ def test_be_before_later_recorded_tp2_does_not_credit_tp2(self):
+  source=ledger("tp1","tp2");at=source[1]["received_at"]+timedelta(seconds=10)
+  record=self.record(source,"sl",100);record["observations"][0]["bar"]["time"]=int(at.timestamp()*1000)-60000
+  row=self.report(source,record)["rows"][0]
+  self.assertEqual(row["pnl_usdt"],50);self.assertEqual([l["kind"] for l in row["legs"]],["TP1","BE"])
+ def test_market_tp2_replaces_later_alert_instead_of_duplicating_it(self):
+  source=ledger("tp1","tp2");record=self.record(source,"tp2",102)
+  row=self.report(source,record)["rows"][0]
+  self.assertEqual([l["kind"] for l in row["legs"]],["TP1","TP2"]);self.assertEqual(row["remaining_fraction"],.2)

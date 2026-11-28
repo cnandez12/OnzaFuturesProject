@@ -4,7 +4,7 @@
     "status": "closed",
     "source": "Bitunix Futures LAST_PRICE",
     "start": 1795793460000,
-    "end": 1795867980000,
+    "end": 1795868400000,
     "observations": [
       {
         "kind": "sl",
@@ -22,14 +22,14 @@
     ],
     "minute_bars_checked": 57,
     "coarse_bars_checked": 21,
-    "as_of": 1795867980000,
+    "as_of": 1795868400000,
     "fingerprint": "5e44bf055dcd46f5ccf4eac44a9e6a923f4545994c1689797749142337c71eb3"
   },
   "XPLUSD.P_30M_1795791600000": {
     "signal_id": "XPLUSD.P_30M_1795791600000",
     "status": "open",
     "start": 1795793460000,
-    "end": 1795867980000,
+    "end": 1795868400000,
     "observations": [
       {
         "kind": "tp1",
@@ -45,7 +45,7 @@
       }
     ],
     "coarse_bars_checked": 21,
-    "as_of": 1795867980000,
+    "as_of": 1795868400000,
     "fingerprint": "b6b9ca3c3fc7ef4ebfcff83fe86cfbf90495a7d3ab34afca253d7b39e4454246"
   },
   "ATOMUSD.P_15M_1795790700000": {
@@ -53,7 +53,7 @@
     "status": "closed",
     "source": "Bitunix Futures LAST_PRICE",
     "start": 1795791660000,
-    "end": 1795867980000,
+    "end": 1795868400000,
     "observations": [
       {
         "kind": "sl",
@@ -71,7 +71,7 @@
     ],
     "minute_bars_checked": 35,
     "coarse_bars_checked": 21,
-    "as_of": 1795867980000,
+    "as_of": 1795868400000,
     "fingerprint": "9c9fa1d55d0b1ef4823ef5e961683b90f754df9c8efac8412cc5dbb3903ed0c0"
   },
   "AVAXUSD.P_15M_1795790700000": {
@@ -79,7 +79,7 @@
     "status": "closed",
     "source": "Bitunix Futures LAST_PRICE",
     "start": 1795791960000,
-    "end": 1795867980000,
+    "end": 1795868400000,
     "observations": [
       {
         "kind": "sl",
@@ -97,14 +97,14 @@
     ],
     "minute_bars_checked": 8,
     "coarse_bars_checked": 21,
-    "as_of": 1795867980000,
+    "as_of": 1795868400000,
     "fingerprint": "63db25b73e63bd971f7ac969639e5d07c1e2c611721ee38096f679f865e96b0e"
   },
   "ARBUSD.P_15M_1795790700000": {
     "signal_id": "ARBUSD.P_15M_1795790700000",
     "status": "open",
     "start": 1795791660000,
-    "end": 1795867980000,
+    "end": 1795868400000,
     "observations": [
       {
         "kind": "tp1",
@@ -120,7 +120,7 @@
       }
     ],
     "coarse_bars_checked": 21,
-    "as_of": 1795867980000,
+    "as_of": 1795868400000,
     "fingerprint": "145ce09171a566377427946a8e69811147f84cf701ecafb8147e10d7f70656db"
   },
   "ASTERUSD.P_15M_1795790700000": {
@@ -128,7 +128,7 @@
     "status": "closed",
     "source": "Bitunix Futures LAST_PRICE",
     "start": 1795791660000,
-    "end": 1795867980000,
+    "end": 1795868400000,
     "observations": [
       {
         "kind": "tp1",
@@ -158,16 +158,28 @@
     ],
     "minute_bars_checked": 85,
     "coarse_bars_checked": 21,
-    "as_of": 1795867980000,
+    "as_of": 1795868400000,
     "fingerprint": "2aad6a022013c426e72e36e7abdba81362f2c9bcfe4cbad6f9b8f7d129b3c869"
   },
   "HYPEUSD.P_15M_1795724100000": {
     "signal_id": "HYPEUSD.P_15M_1795724100000",
     "status": "closed",
     "source": "Bitunix Futures LAST_PRICE",
-    "start": 1795748580000,
-    "end": 1795867980000,
+    "start": 1795745280000,
+    "end": 1795868400000,
     "observations": [
+      {
+        "kind": "tp2",
+        "price": 65.351,
+        "bar": {
+          "time": 1795748520000,
+          "open": 65.098,
+          "high": 65.426,
+          "low": 65.094,
+          "close": 65.306
+        },
+        "ambiguous": false
+      },
       {
         "kind": "sl",
         "price": 62.757,
@@ -182,9 +194,9 @@
         "stop_kind": "BE"
       }
     ],
-    "minute_bars_checked": 41,
-    "coarse_bars_checked": 33,
-    "as_of": 1795867980000,
+    "minute_bars_checked": 101,
+    "coarse_bars_checked": 34,
+    "as_of": 1795868400000,
     "fingerprint": "502ba7d85c1dcff737e5397f2d154d0dae123d75acab434fbbccd213c2ea1ea7"
   },
   "ATOMUSD.P_1H_1795442400000": {
@@ -192,7 +204,7 @@
     "status": "closed",
     "source": "Bitunix Futures LAST_PRICE",
     "start": 1795483260000,
-    "end": 1795867980000,
+    "end": 1795868400000,
     "observations": [
       {
         "kind": "sl",
@@ -210,7 +222,7 @@
     ],
     "minute_bars_checked": 17,
     "coarse_bars_checked": 107,
-    "as_of": 1795867980000,
+    "as_of": 1795868400000,
     "fingerprint": "e89afca031fa5ade87c06c69a0199f9eb1a46db2a48c7904b3fdb7d11eb87fcc"
   },
   "SUIUSD.P_15M_1794576600000": {
@@ -218,7 +230,7 @@
     "status": "closed",
     "source": "Bitunix Futures LAST_PRICE",
     "start": 1794577560000,
-    "end": 1795867980000,
+    "end": 1795868400000,
     "observations": [
       {
         "kind": "sl",
@@ -236,15 +248,38 @@
     ],
     "minute_bars_checked": 36,
     "coarse_bars_checked": 199,
-    "as_of": 1795867980000,
+    "as_of": 1795868400000,
     "fingerprint": "3c8d8c89807ff5e342edfcb42b00033e489c076945cab771b195295df48d021c"
+  },
+  "ARBUSD.P_4H_1794484800000": {
+    "signal_id": "ARBUSD.P_4H_1794484800000",
+    "status": "open",
+    "start": 1795027860000,
+    "end": 1795868400000,
+    "observations": [
+      {
+        "kind": "tp2",
+        "price": 0.12113,
+        "bar": {
+          "time": 1795134660000,
+          "open": 0.12118,
+          "high": 0.12117,
+          "low": 0.12077,
+          "close": 0.1208
+        },
+        "ambiguous": false
+      }
+    ],
+    "coarse_bars_checked": 234,
+    "as_of": 1795868400000,
+    "fingerprint": "d89af28b05f75924f55fd6a0c23b762da907625b2e76162651bf350e9c06a1e6"
   },
   "XAUUSD.P_1H_1794182400000": {
     "signal_id": "XAUUSD.P_1H_1794182400000",
     "status": "closed",
     "source": "Bitunix Futures LAST_PRICE",
     "start": 1794186060000,
-    "end": 1795867980000,
+    "end": 1795868400000,
     "observations": [
       {
         "kind": "tp2",
@@ -274,33 +309,33 @@
     ],
     "minute_bars_checked": 81,
     "coarse_bars_checked": 199,
-    "as_of": 1795867980000,
+    "as_of": 1795868400000,
     "fingerprint": "c2902699d4e8643053a6578c38ce51c1987f112632d6507d478dd8ecd24e23b5"
   },
   "ATOMUSD.P_30M_1793892600000": {
     "signal_id": "ATOMUSD.P_30M_1793892600000",
     "status": "closed",
     "source": "Bitunix Futures LAST_PRICE",
-    "start": 1794174960000,
-    "end": 1795867980000,
+    "start": 1793919300000,
+    "end": 1795868400000,
     "observations": [
       {
         "kind": "sl",
         "price": 1.424,
         "bar": {
-          "time": 1794393540000,
-          "open": 1.421,
+          "time": 1793935680000,
+          "open": 1.423,
           "high": 1.425,
-          "low": 1.42,
-          "close": 1.425
+          "low": 1.421,
+          "close": 1.421
         },
         "ambiguous": false,
         "stop_kind": "BE"
       }
     ],
-    "minute_bars_checked": 40,
+    "minute_bars_checked": 29,
     "coarse_bars_checked": 199,
-    "as_of": 1795867980000,
+    "as_of": 1795868400000,
     "fingerprint": "07f87986ea5537105ee78069b719fdb56c3ca53a05cb68f88fe47a986b8b5290"
   },
   "HBARUSD.P_1H_1793804400000": {
@@ -308,7 +343,7 @@
     "status": "closed",
     "source": "Bitunix Futures LAST_PRICE",
     "start": 1793808060000,
-    "end": 1795867980000,
+    "end": 1795868400000,
     "observations": [
       {
         "kind": "sl",
@@ -326,7 +361,7 @@
     ],
     "minute_bars_checked": 9,
     "coarse_bars_checked": 199,
-    "as_of": 1795867980000,
+    "as_of": 1795868400000,
     "fingerprint": "6d722e96e88df4ac7b7328b80259fd9dbb9cebc39111a433b28c96562f339d6e"
   },
   "ONDOUSD.P_1H_1793304000000": {
@@ -334,7 +369,7 @@
     "status": "closed",
     "source": "Bitunix Futures LAST_PRICE",
     "start": 1793314620000,
-    "end": 1795867980000,
+    "end": 1795868400000,
     "observations": [
       {
         "kind": "sl",
@@ -352,7 +387,7 @@
     ],
     "minute_bars_checked": 10,
     "coarse_bars_checked": 199,
-    "as_of": 1795867980000,
+    "as_of": 1795868400000,
     "fingerprint": "885ab9e4e0f1c9b5708b23e48136a13889287ab79e4adbf7aac167b4f03d2455"
   },
   "BCHUSD.P_4H_1791460800000": {
@@ -360,7 +395,7 @@
     "status": "closed",
     "source": "Bitunix Futures LAST_PRICE",
     "start": 1791479100000,
-    "end": 1795867980000,
+    "end": 1795868400000,
     "observations": [
       {
         "kind": "sl",
@@ -378,7 +413,7 @@
     ],
     "minute_bars_checked": 19,
     "coarse_bars_checked": 199,
-    "as_of": 1795867980000,
+    "as_of": 1795868400000,
     "fingerprint": "d8ad9cb07dd28097501da7ace3e98379f666c5082a11f0e71e460869a0e087c6"
   }
 }
