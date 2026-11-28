@@ -80,7 +80,12 @@ async function renderAudit() {
     auditCard(summary,'TP1 / TP2 / TP3 alcanzados',`${s.reached_counts['1']} / ${s.reached_counts['2']} / ${s.reached_counts['3']}`);
     auditCard(summary,'BE habilitado / salidas BE simuladas',`${s.be_activated} / ${s.inferred}`);
     const coverage=data.coverage,r=data.reconciliation,integrity=data.integrity;
-    if(data.automatic_reconciliation?.enabled)auditCard(summary,'Conciliación automática web',data.automatic_reconciliation.status==='ok'?'Activa':'En revisión');
+    const auto=data.automatic_reconciliation;
+    if(auto?.enabled) {
+      const fresh=Number.isFinite(Date.parse(auto.last_completed_at)) && Date.now()-Date.parse(auto.last_completed_at)<240000;
+      const label=fresh && auto.status==='ok'?'Activa':fresh && auto.status==='checking'?'Activa · verificando':'En revisión';
+      auditCard(summary,'Conciliación automática web',label);
+    }
     document.getElementById('audit-coverage').textContent=`Cobertura global: ${coverage.events_total} eventos guardados · ${Object.entries(coverage.states).map(([k,v])=>`${k}: ${v}`).join(' · ')} · ${coverage.incidents} incidencias pendientes (${coverage.incident_events} eventos) · ${coverage.archived_groups || 0} grupos incompletos archivados, fuera del P&L. Selección: ${coverage.selected_signals} señales. Conciliación del stop original: ${r.matched} coinciden · ${r.mismatched} diferencias · ${r.missing} sin cierre guardado · ${r.reconstructed || 0} escenarios conciliados · diferencia ${auditMoney(r.difference_usdt)}. Fechas de entrada en Colombia.`;
     const compare=document.getElementById('audit-comparison');compare.replaceChildren(auditTable(
       ['Estrategia','Cierres','P&L bruto','Win rate','PF','Drawdown USDT','Peor operación','Ganadas / perdidas / neutras'],
