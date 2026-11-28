@@ -30,7 +30,7 @@ function auditDetails(signal) {
   box.dataset.loaded='true';
   if(signal.reconstruction)box.append(auditNode('p',signal.reconstruction.note));
   if(signal.integrity_note)box.append(auditNode('p',signal.integrity_note));
-  box.append(auditNode('p',`Entrada: ${signal.entry_price} · Stop original: ${signal.original_stop ?? '—'} · TP: ${signal.targets.join(' / ')} · Cantidad inicial: ${signal.quantity_initial.toFixed(8)} · Margen histórico: ${auditMoney(signal.margin_used)} · ${signal.leverage}x`));
+  box.append(auditNode('p',`Entrada: ${signal.entry_price} · Stop original: ${signal.original_stop ?? '—'} · TP: ${signal.targets.join(' / ')} · Cantidad inicial: ${signal.quantity_initial.toFixed(8)} · Margen teórico del escenario: ${auditMoney(signal.margin_used)} · Margen original guardado: ${auditMoney(signal.source_margin_used)} · ${signal.leverage}x`));
   box.append(auditNode('p',signal.be_activated ? `BE habilitado automáticamente tras TP1: ${auditDate(signal.be_activated_at)} · Stop en entrada: ${signal.be_stop_price} · Fecha persistida: ${signal.be_persisted?'sí':'pendiente'} · Precio persistido: ${signal.stored_be_stop_price ?? 'pendiente'}` : 'BE inactivo: todavía no hay TP1 aplicado.'));
   for(const [mode,scenario] of Object.keys(auditNames).map(key=>[key,signal.scenarios[key]])) {
     box.append(auditNode('h3',auditNames[mode]));
