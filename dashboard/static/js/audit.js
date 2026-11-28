@@ -25,6 +25,9 @@ function auditQuality(row) {
 }
 function auditDetails(signal) {
   const box=auditNode('details',null,'audit-detail');box.append(auditNode('summary','Ver tramos, los tres escenarios y eventos guardados'));
+  box.addEventListener('toggle',()=>{
+  if(!box.open || box.dataset.loaded)return;
+  box.dataset.loaded='true';
   if(signal.reconstruction)box.append(auditNode('p',signal.reconstruction.note));
   if(signal.integrity_note)box.append(auditNode('p',signal.integrity_note));
   box.append(auditNode('p',`Entrada: ${signal.entry_price} · Stop original: ${signal.original_stop ?? '—'} · TP: ${signal.targets.join(' / ')} · Cantidad inicial: ${signal.quantity_initial.toFixed(8)} · Margen histórico: ${auditMoney(signal.margin_used)} · ${signal.leverage}x`));
@@ -41,6 +44,7 @@ function auditDetails(signal) {
   box.append(auditNode('h3','Eventos persistidos y entrega por evento'));
   box.append(auditTable(['ID','Evento','Estado local','Precio','ROI recibido','Recibido · Colombia','Aplicado · Colombia','Telegram'],
     signal.events.map(e=>[e.id,e.type,e.state,e.price,auditPercent(e.roi_pct),auditDate(e.received_at),auditDate(e.applied_at),e.telegram_status])));
+  });
   return box;
 }
 function renderAuditChart(comparison) {
@@ -76,7 +80,7 @@ async function renderAudit() {
     auditCard(summary,'TP1 / TP2 / TP3 alcanzados',`${s.reached_counts['1']} / ${s.reached_counts['2']} / ${s.reached_counts['3']}`);
     auditCard(summary,'BE habilitado / salidas BE simuladas',`${s.be_activated} / ${s.inferred}`);
     const coverage=data.coverage,r=data.reconciliation;
-    document.getElementById('audit-coverage').textContent=`Cobertura global: ${coverage.events_total} eventos guardados · ${Object.entries(coverage.states).map(([k,v])=>`${k}: ${v}`).join(' · ')} · ${coverage.incidents} incidencias (${coverage.incident_events} eventos). Selección: ${coverage.selected_signals} señales. Conciliación del stop original: ${r.matched} coinciden · ${r.mismatched} diferencias · ${r.missing} sin cierre guardado · ${r.reconstructed || 0} reconstruidos desde alertas · diferencia ${auditMoney(r.difference_usdt)}. Fechas de entrada en Colombia.`;
+    document.getElementById('audit-coverage').textContent=`Cobertura global: ${coverage.events_total} eventos guardados · ${Object.entries(coverage.states).map(([k,v])=>`${k}: ${v}`).join(' · ')} · ${coverage.incidents} incidencias (${coverage.incident_events} eventos). Selección: ${coverage.selected_signals} señales. Conciliación del stop original: ${r.matched} coinciden · ${r.mismatched} diferencias · ${r.missing} sin cierre guardado · ${r.reconstructed || 0} escenarios conciliados · diferencia ${auditMoney(r.difference_usdt)}. Fechas de entrada en Colombia.`;
     const compare=document.getElementById('audit-comparison');compare.replaceChildren(auditTable(
       ['Estrategia','Cierres','P&L bruto','Win rate','PF','Drawdown USDT','Peor operación','Ganadas / perdidas / neutras'],
       Object.keys(auditNames).map(key=>[key,data.comparison[key]]).map(([key,v])=>[auditNames[key],v.closed,auditMoney(v.pnl_usdt),auditPercent(v.win_rate),auditPF(v),auditMoney(v.max_drawdown_usdt),auditMoney(v.worst_trade_usdt),`${v.wins} / ${v.losses} / ${v.flat}`])));
