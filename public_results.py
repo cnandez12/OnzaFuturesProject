@@ -92,13 +92,13 @@ def select_featured(rows,marks,limit=4,market_states=None):
 def project_public(report, capital, marks=None, quote_as_of=None, market_states=None):
     market_states=market_states or {}
     allowed = ('signal_id','symbol','direction','timeframe','entry_price','original_stop','targets',
-               'max_tp','be_activated','be_stop_price','be_activated_at','closed','close_reason',
+               'exit_price','max_tp','be_activated','be_stop_price','be_activated_at','closed','close_reason',
                'received_at','closed_at','pnl_usdt','roi_pct','recorded_partial_pnl_usdt','legs',
                'remaining_fraction','leverage','margin_used','risk_usdt','sizing_mode','roi_basis','reconstruction','integrity_note')
     featured,performance=select_featured(report['rows'],marks or {},market_states=market_states)
     preview_ids={r['signal_id'] for r in featured if not r['closed']}
     featured_ranks={r['signal_id']:i for i,r in enumerate(featured)}
-    sensitive = {'entry_price','original_stop','targets','be_stop_price',
+    sensitive = {'exit_price','entry_price','original_stop','targets','be_stop_price',
                  'be_activated_at','pnl_usdt','roi_pct','recorded_partial_pnl_usdt',
                  'legs','remaining_fraction','leverage','margin_used','risk_usdt'}
     signals = []
