@@ -69,11 +69,11 @@ async function loadAll() {
 }
 
 function renderAll() {
-  const bot = trades.filter(t => t.source === 'bot');
-  const reconstructed = trades.filter(t => t.source === 'reconstructed');
+  const bot = trades.filter(t => t.source === 'bot' || t.source === 'reconciled_alerts');
+  const reconstructed = trades.filter(t => t.source === 'reconciled_alerts');
   const botWins = bot.filter(t => Number(t.final_profit_usdt) > 0).length;
   const botPnl = bot.reduce((a,t) => a + Number(t.final_profit_usdt || 0), 0);
-  set('source-summary', `TradingView → CryptoPilot AI: ${bot.length} cierres · ${bot.length ? (botWins/bot.length*100).toFixed(1) : '0.0'}% ganadores · ${botPnl >= 0 ? '+' : ''}$${botPnl.toFixed(2)} brutos. Gestión 40/40/20 con BE tras TP1.`);
+  set('source-summary', `TradingView → CryptoPilot AI: ${bot.length} cierres · ${bot.length ? (botWins/bot.length*100).toFixed(1) : '0.0'}% ganadores · ${botPnl >= 0 ? '+' : ''}$${botPnl.toFixed(2)} brutos${reconstructed.length ? ` · ${reconstructed.length} cierre reconstruido de alertas` : ''}. Gestión 40/40/20 con BE tras TP1.`);
   renderKPIs();
   renderDistributions();
   renderRecent();

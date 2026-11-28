@@ -25,6 +25,8 @@ function auditQuality(row) {
 }
 function auditDetails(signal) {
   const box=auditNode('details',null,'audit-detail');box.append(auditNode('summary','Ver tramos, los tres escenarios y eventos guardados'));
+  if(signal.reconstruction)box.append(auditNode('p',signal.reconstruction.note));
+  if(signal.integrity_note)box.append(auditNode('p',signal.integrity_note));
   box.append(auditNode('p',`Entrada: ${signal.entry_price} · Stop original: ${signal.original_stop ?? '—'} · TP: ${signal.targets.join(' / ')} · Cantidad inicial: ${signal.quantity_initial.toFixed(8)} · Margen histórico: ${auditMoney(signal.margin_used)} · ${signal.leverage}x`));
   box.append(auditNode('p',signal.be_activated ? `BE habilitado automáticamente tras TP1: ${auditDate(signal.be_activated_at)} · Stop en entrada: ${signal.be_stop_price} · Fecha persistida: ${signal.be_persisted?'sí':'pendiente'} · Precio persistido: ${signal.stored_be_stop_price ?? 'pendiente'}` : 'BE inactivo: todavía no hay TP1 aplicado.'));
   for(const [mode,scenario] of Object.keys(auditNames).map(key=>[key,signal.scenarios[key]])) {
@@ -32,7 +34,7 @@ function auditDetails(signal) {
     box.append(auditNode('p',`${scenario.closed?scenario.close_reason:'Abierta'} · Resultado cerrado: ${auditMoney(scenario.pnl_usdt)} · ROI sobre margen: ${auditPercent(scenario.roi_pct)} · Remanente: ${auditPercent(scenario.remaining_fraction*100)} · ${auditQuality(scenario)}`));
     box.append(auditTable(['Tramo','% inicial','Cantidad','Precio de salida','P&L USDT','ROI / margen','Fecha Colombia','Base del cálculo'],
       scenario.legs.map(l=>[l.kind,auditPercent(l.fraction*100),l.quantity.toFixed(8),l.price,auditMoney(l.pnl_usdt),auditPercent(l.roi_pct),auditDate(l.at),
-        ({recorded_alert:'Precio guardado',tp1_rule_inferred:'Entrada por regla BE',price_observation:'Precio observado',highest_tp_hindsight:'TP máximo retrospectivo'})[l.basis] || l.basis])));
+        ({recorded_alert:'Precio guardado',received_pending_alert:'Alerta recibida pendiente',target_inferred_from_later_tp:'Objetivo inferido por TP posterior',tp1_rule_inferred:'Entrada por regla BE',price_observation:'Precio observado',highest_tp_hindsight:'TP máximo retrospectivo'})[l.basis] || l.basis])));
   }
   box.append(auditNode('h3','Conciliación con el registro original'));
   box.append(auditNode('p',`Registro guardado: ${auditMoney(signal.recorded_pnl_usdt)} · Reconstrucción sin BE: ${auditMoney(signal.scenarios.partial_no_be.pnl_usdt)} · Diferencia: ${auditMoney(signal.reconciliation_difference_usdt)} · ${signal.reconciliation_status}`));
@@ -74,7 +76,7 @@ async function renderAudit() {
     auditCard(summary,'TP1 / TP2 / TP3 alcanzados',`${s.reached_counts['1']} / ${s.reached_counts['2']} / ${s.reached_counts['3']}`);
     auditCard(summary,'BE habilitado / salidas BE simuladas',`${s.be_activated} / ${s.inferred}`);
     const coverage=data.coverage,r=data.reconciliation;
-    document.getElementById('audit-coverage').textContent=`Cobertura global: ${coverage.events_total} eventos guardados · ${Object.entries(coverage.states).map(([k,v])=>`${k}: ${v}`).join(' · ')} · ${coverage.incidents} incidencias (${coverage.incident_events} eventos). Selección: ${coverage.selected_signals} señales. Conciliación del stop original: ${r.matched} coinciden · ${r.mismatched} diferencias · ${r.missing} sin cierre guardado · diferencia ${auditMoney(r.difference_usdt)}. Fechas de entrada en Colombia.`;
+    document.getElementById('audit-coverage').textContent=`Cobertura global: ${coverage.events_total} eventos guardados · ${Object.entries(coverage.states).map(([k,v])=>`${k}: ${v}`).join(' · ')} · ${coverage.incidents} incidencias (${coverage.incident_events} eventos). Selección: ${coverage.selected_signals} señales. Conciliación del stop original: ${r.matched} coinciden · ${r.mismatched} diferencias · ${r.missing} sin cierre guardado · ${r.reconstructed || 0} reconstruidos desde alertas · diferencia ${auditMoney(r.difference_usdt)}. Fechas de entrada en Colombia.`;
     const compare=document.getElementById('audit-comparison');compare.replaceChildren(auditTable(
       ['Estrategia','Cierres','P&L bruto','Win rate','PF','Drawdown USDT','Peor operación','Ganadas / perdidas / neutras'],
       Object.keys(auditNames).map(key=>[key,data.comparison[key]]).map(([key,v])=>[auditNames[key],v.closed,auditMoney(v.pnl_usdt),auditPercent(v.win_rate),auditPF(v),auditMoney(v.max_drawdown_usdt),auditMoney(v.worst_trade_usdt),`${v.wins} / ${v.losses} / ${v.flat}`])));
@@ -89,7 +91,7 @@ async function renderAudit() {
        `${auditMoney(signal.margin_used)} · ${signal.leverage}x`,signal.max_tp?`TP${signal.max_tp}`:'Ninguno',
        signal.be_activated?`Activo desde TP1 · ${signal.be_stop_price}${signal.be_applied?' · aplicado':' · omitido en este modo'}`:'Inactivo',
        signal.closed?signal.close_reason:'Abierta',auditMoney(signal.pnl_usdt),auditMoney(signal.recorded_partial_pnl_usdt),
-       signal.reconciliation_status==='match'?'Coincide':signal.reconciliation_status==='open'?'Abierta':signal.reconciliation_status==='missing_record'?'Sin registro':auditMoney(signal.reconciliation_difference_usdt)
+       signal.reconciliation_status==='reconstructed'?'Reconstruido desde alertas':signal.reconciliation_status==='match'?'Coincide':signal.reconciliation_status==='open'?'Abierta':signal.reconciliation_status==='missing_record'?'Sin registro':auditMoney(signal.reconciliation_difference_usdt)
       ].forEach(value=>auditCell(tr,value));body.append(tr);
       const detailRow=auditNode('tr'),cell=auditCell(detailRow,null);cell.colSpan=9;cell.append(auditDetails(signal));body.append(detailRow);
     }
