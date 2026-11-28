@@ -20,7 +20,7 @@ def fingerprint(events):
 def supplement(signal_id,events,applied,mode):
     record=EVIDENCE.get(signal_id)
     if mode!="partial_be" or not record or record["fingerprint"]!=fingerprint(events):return applied,None
-    if any(e["event_type"] in ("sl","close","tp3") for e in applied):return applied,None
+    if any(e["event_type"] in ("sl","close","tp3") and e.get("state","applied")=="applied" for e in events):return applied,None
     if not record.get("observations"):return applied,None
     initial=next(e for e in applied if e["event_type"]=="entry")
     extra=[]
