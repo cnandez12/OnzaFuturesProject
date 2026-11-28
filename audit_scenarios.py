@@ -108,7 +108,7 @@ def evaluate(signal_id: str, events: list[dict], *, mode: str, margin,
                 exit_be(be_hit_at)
                 break
             if kind in WEIGHTS:
-                add_leg(kind.upper(), event["payload"]["price"], WEIGHTS[kind], moment)
+                add_leg(kind.upper(), event["payload"]["price"], WEIGHTS[kind], moment, event.get("basis","recorded_alert"))
                 if kind == "tp1":
                     activated = True
                 if remaining == 0:

@@ -3,7 +3,8 @@ import re
 from presentation_config import RISK_PER_TRADE
 
 
-def project_sql(sql, params, initial_balance):
+def project_sql(sql, params, initial_balance, recovered=None):
+    recovered=recovered or []
     amount = str(RISK_PER_TRADE)
     if re.search(r"\bFROM trades\b",sql) and "pnl_accumulated" in sql:
         # Existing signal margins remain stored unchanged; scale only the returned row.
@@ -16,6 +17,9 @@ def project_sql(sql, params, initial_balance):
           FROM trades t JOIN tv_signals s ON s.id=t.message_id
         ) """
         sql = re.sub(r"\bFROM trades\b", "FROM presentation_open trades",sql)
+        if recovered:
+            cte=cte.replace("FROM trades t JOIN tv_signals s ON s.id=t.message_id", "FROM trades t JOIN tv_signals s ON s.id=t.message_id WHERE t.message_id<>ALL(%s::bigint[])")
+            params=([-int(r["id"]) for r in recovered],*params)
         return cte+sql,params
     if not re.search(r"\bsim_track_record\b",sql) or "final_profit" not in sql:
         return sql,params
@@ -46,7 +50,13 @@ def project_sql(sql, params, initial_balance):
         'balance_before',%s+COALESCE(SUM(display_usdt) OVER(ORDER BY closed_at,id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING),0),
         'balance_after',%s+SUM(display_usdt) OVER(ORDER BY closed_at,id)
       ))).*,display_usdt AS recorded_final_profit_usdt,ROUND(display_return*100,4) AS recorded_final_profit_pct,
-        final_profit_usdt AS source_recorded_final_profit_usdt
+        CASE WHEN id<0 THEN NULL ELSE final_profit_usdt END AS source_recorded_final_profit_usdt
       FROM money m
     ) """
-    return cte+re.sub(r"\bsim_track_record\b","dashboard_results",sql),(initial_balance,initial_balance,*params)
+    extra=()
+    if recovered:
+        from psycopg2.extras import Json
+        cte=cte.replace("WITH priced AS (","WITH web_records AS (SELECT * FROM sim_track_record UNION ALL SELECT * FROM jsonb_populate_recordset(NULL::sim_track_record,%s::jsonb)), priced AS (")
+        cte=cte.replace("FROM sim_track_record r", "FROM web_records r")
+        extra=(Json(recovered),)
+    return cte+re.sub(r"\bsim_track_record\b","dashboard_results",sql),(*extra,initial_balance,initial_balance,*params)

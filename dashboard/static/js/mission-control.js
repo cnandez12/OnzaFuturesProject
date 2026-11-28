@@ -80,7 +80,7 @@ function renderOverviewOpenSignals() {
     const netPct = pnl?.netPct ?? null;
     const tp1 = Boolean(p.tp1_filled), tp2 = Boolean(p.tp2_filled);
     const be = Boolean(p.be_active);
-    const state = tp2 ? 'TP2 alcanzado' : tp1 ? 'TP1 alcanzado' : 'Riesgo abierto';
+    const state = pnl?.issue ? 'Estado por conciliar' : tp2 ? 'TP2 alcanzado' : tp1 ? 'TP1 alcanzado' : 'Riesgo abierto';
     const protect = be ? ' · BE activo' : '';
     return `<div class="mission-open-row" data-pair="${safePair}" data-timeframe="${esc(p.timeframe||'15m')}" onclick="fbOpenSymbol(this.dataset.pair,this.dataset.timeframe)" title="Abrir ${safePair} en el chart">
       <div class="mission-open-main"><span class="mission-open-symbol">${safePair}</span><span class="mission-dir ${isLong?'long':'short'}">${isLong?'LONG':'SHORT'}</span></div>

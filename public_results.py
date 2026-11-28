@@ -1,5 +1,6 @@
 """Public, read-only projection. Internal delivery information never leaves this API."""
 from audit_reporting import AUDIT_SQL, build_report
+from web_integrity import quote_issue
 from market_visibility import canonical, live_market_states, LIVE_EXCLUDED
 from psycopg2.extras import RealDictCursor
 from datetime import datetime, timezone
@@ -56,6 +57,7 @@ def open_performance(row,marks):
     """Realized partials + floating remainder, divided by the original margin."""
     try:
         mark=float(marks[market_symbol(row['symbol'])])
+        if quote_issue(row,mark):return None
         entry=float(row['entry_price']);margin=float(row['margin_used'])
         leverage=float(row['leverage']);remaining=float(row['remaining_fraction'])
         realized=float(row.get('scenario_partial_pnl_usdt') or 0)
@@ -75,7 +77,7 @@ def select_featured(rows,marks,limit=4,market_states=None):
     market_states=market_states or {}
     rows=[r for r in rows if market_states.get(canonical(r['symbol']),{}).get('visible',canonical(r['symbol']) not in LIVE_EXCLUDED)]
     performance={r['signal_id']:open_performance(r,marks) for r in rows if not r['closed']}
-    eligible=[r for r in rows if not r['closed'] and (r['max_tp']>=1 or
+    eligible=[r for r in rows if not r['closed'] and not quote_issue(r,marks.get(market_symbol(r['symbol']))) and (r['max_tp']>=1 or
               (performance[r['signal_id']] and performance[r['signal_id']]['pnl_usdt']>0))]
     def score(row):
         live=performance[row['signal_id']]
@@ -92,7 +94,7 @@ def project_public(report, capital, marks=None, quote_as_of=None, market_states=
     allowed = ('signal_id','symbol','direction','timeframe','entry_price','original_stop','targets',
                'max_tp','be_activated','be_stop_price','be_activated_at','closed','close_reason',
                'received_at','closed_at','pnl_usdt','roi_pct','recorded_partial_pnl_usdt','legs',
-               'remaining_fraction','leverage','margin_used','risk_usdt','sizing_mode','roi_basis')
+               'remaining_fraction','leverage','margin_used','risk_usdt','sizing_mode','roi_basis','reconstruction','integrity_note')
     featured,performance=select_featured(report['rows'],marks or {},market_states=market_states)
     preview_ids={r['signal_id'] for r in featured if not r['closed']}
     featured_ranks={r['signal_id']:i for i,r in enumerate(featured)}
@@ -103,6 +105,8 @@ def project_public(report, capital, marks=None, quote_as_of=None, market_states=
     for row in report['rows']:
         visible = row['closed'] or row['signal_id'] in preview_ids
         public_row = {key: row[key] for key in allowed if key in row and (visible or key not in sensitive)}
+        if public_row.get('reconstruction'):public_row['reconstruction']={'note':row['reconstruction']['note'],'inferred_targets':row['reconstruction']['inferred_targets']}
+        if not row['closed']:public_row['integrity_note']=quote_issue(row,(marks or {}).get(market_symbol(row['symbol'])))
         public_row['live_eligible']=market_states.get(canonical(row['symbol']),{}).get('visible',canonical(row['symbol']) not in LIVE_EXCLUDED)
         public_row['prices_visible'] = visible
         public_row['visibility'] = 'history' if row['closed'] else ('preview' if visible else 'protected')

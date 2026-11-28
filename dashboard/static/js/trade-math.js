@@ -64,9 +64,10 @@ function openPositionPnl(p, markPrice) {
   const mark = Number(markPrice);
   const sign = direction === 'LONG' ? 1 : -1;
   const remaining = Math.max(0,1-(p.tp1_filled ? .4 : 0)-(p.tp2_filled ? .4 : 0)-(p.tp3_filled ? .2 : 0));
-  const floating = mark > 0 ? sign*(mark-entry)/entry*margin*leverage*remaining : null;
+  const issue=typeof signalIntegrityIssue==='function'?signalIntegrityIssue(p,markPrice):p.integrity_note;
+  const floating = !issue && mark > 0 ? sign*(mark-entry)/entry*margin*leverage*remaining : null;
   const net = floating === null ? (remaining===0?accumulated:null) : accumulated+floating;
-  return {margin, accumulated, remaining, floating, net,
+  return {margin, accumulated, remaining, floating, net, issue,
     floatingPct: floating === null ? null : floating/margin*100,
     netPct: net === null ? null : net/margin*100};
 }

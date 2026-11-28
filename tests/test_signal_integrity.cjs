@@ -1,0 +1,10 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+assert.equal(fs.readFileSync('dashboard/static/js/signal-integrity.js','utf8'),fs.readFileSync('public-site/signal-integrity.js','utf8'));
+const c=vm.createContext({});vm.runInContext(fs.readFileSync('dashboard/static/js/signal-integrity.js','utf8'),c);vm.runInContext(fs.readFileSync('dashboard/static/js/trade-math.js','utf8'),c);
+c.p={entry:100,direction:'LONG',stop_loss:98,tp1:101,tp2:102,tp3:103,margin_used:625,leverage:20,pnl_accumulated:0};
+let r=vm.runInContext('openPositionPnl(p,104)',c);assert.equal(r.net,null);assert.equal(r.floating,null);assert.match(r.issue,/TP3/);
+r=vm.runInContext('openPositionPnl(p,100.5)',c);assert.equal(r.net,62.5);
+c.p.integrity_note='Salida por conciliar';r=vm.runInContext('openPositionPnl(p,100.5)',c);assert.equal(r.net,null);assert.match(r.issue,/conciliar/);
+c.p={...c.p,integrity_note:null,direction:'SHORT',tp1:99,tp2:98,tp3:97,stop_loss:102};
+r=vm.runInContext('openPositionPnl(p,96)',c);assert.equal(r.net,null);assert.match(r.issue,/TP3/);
+console.log('PASS: inconsistent states cannot show unbounded ROI or fabricated floating P&L');

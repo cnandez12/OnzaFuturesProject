@@ -823,6 +823,11 @@ function fbDrawSignals() {
     //  BREAK-EVEN: al tocar TP1 (hit_tp1 / be_active) la zona roja DESAPARECE
     //  y la entrada pasa a "ENTRY + BE" (el SL queda en el Entry).
     // ══════════════════════════════════════════════════════════════════
+    if(isOpen&&sig.integrity_note){
+      const last=fbState.data.at(-1);
+      if(last)zones.push({type:'tplbl',time:last.time,price:entry,accent:'#FFD166',line1:'Salida por conciliar',line2:sig.integrity_note});
+      continue;
+    }
     if (isOpen && sig!==latestOpen) {
       // A later entry can belong to another timeframe: it does not prove closure.
       // Remove only the old projection, without inventing an exit or changing P&L.
@@ -917,7 +922,7 @@ function fbDrawSignals() {
 
       zones.push({type:'tplbl', time: anchorTime, price: anchorPrice, dot:true,
         icon: icon, accent: accent,
-        line1: `CLOSE SIGNAL ${isL ? 'LONG' : 'SHORT'} · ${scenario}${sig.close_reason === 'BE_INFERRED' ? ' (inferido)' : ''}`,
+        line1: `CLOSE SIGNAL ${isL ? 'LONG' : 'SHORT'} · ${scenario}${sig.close_reason === 'BE_INFERRED' ? ' (inferido)' : ''}${sig.reconstruction_note?' · reconstruido':''}`,
         line2: sig.final_profit_usdt!==null&&sig.final_profit_usdt!==undefined&&Number.isFinite(Number(sig.final_profit_usdt))
           ?`${Number(sig.final_profit_usdt)>=0?'+':''}$${Number(sig.final_profit_usdt).toFixed(2)} USDT · ${pctTxt}`:pctTxt});
     }
@@ -1271,6 +1276,7 @@ function fbTickCountdown() {
 /* ROI actual desde la entrada hasta el mark price vigente.
    Incluye parciales realizados y el remanente flotante de la cuenta representada. */
 function fbOpenNetPct(sig, mark) {
+  if(typeof signalIntegrityIssue==='function'&&signalIntegrityIssue(sig,mark))return null;
   const entry = Number(sig.entry_price);
   const price = Number(mark);
   const leverage = Number(sig.leverage);
@@ -1294,6 +1300,8 @@ function fbUpdateDeltaPnl() {
 
   const freshMark = lastMarkFetchAt && Date.now() - lastMarkFetchAt < 15000
     ? liveMarkPrices['BITUNIX:' + fbState.symbol.replace('/', '')] : null;
+  const issue=typeof signalIntegrityIssue==='function'?signalIntegrityIssue(sig,freshMark):sig.integrity_note;
+  if(issue)fbProjectionScope('Estado por conciliar: '+issue);
   const net = fbOpenNetPct(sig, freshMark);
   if (net === null) { fbState._dpnl = null; fbPositionDeltaPnl(); return; }
 

@@ -64,7 +64,7 @@ function renderHistory() {
     const dt = t.closed_at ? new Date(t.closed_at).toLocaleString('es',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
     return `<tr>
       <td class="col-idx" style="color:var(--text3);width:32px">${idx}</td>
-      <td><span style="font-weight:700">${esc(t.symbol)}</span><small style="display:block;color:var(--text3)">${t.source==='reconstructed'?'Reconstruido':'TradingView'}</small></td>
+      <td><span style="font-weight:700">${esc(t.symbol)}</span><small style="display:block;color:var(--text3)">${t.reconstruction_note?'TP3 reconstruido':t.source==='reconstructed'?'Reconstruido':'TradingView'}</small></td>
       <td><span class="badge b-${esc((t.direction||'').toLowerCase())}">${esc(t.direction)}</span></td>
       <td class="num col-price">${fmtP(t.entry_price)}</td>
       <td class="num col-price">${fmtP(t.exit_price)}</td>
@@ -96,7 +96,7 @@ function renderHistory() {
     return `<div class="hist-card">
       <div class="hist-card-accent" style="background:${col}"></div>
       <div class="hist-card-top">
-        <span class="hist-card-sym">${esc(t.symbol)} <small style="color:var(--text3)">${t.source==='reconstructed'?'Reconstruido':'TradingView'}</small></span>
+        <span class="hist-card-sym">${esc(t.symbol)} <small style="color:var(--text3)">${t.reconstruction_note?'TP3 reconstruido':t.source==='reconstructed'?'Reconstruido':'TradingView'}</small></span>
         <span class="badge b-${esc((t.direction||'').toLowerCase())}">${esc(t.direction)}</span>
         <span class="badge ${tradeResultClass(t)}" style="font-size:10px">${esc(fmtScenario(t))}</span>
         <span class="hist-card-pnl" style="color:${col}">${p>=0?'+':''}${p.toFixed(1)}%</span>

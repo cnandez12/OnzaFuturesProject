@@ -13,7 +13,7 @@ function historyRows(){const search=$('search').value.trim().toUpperCase(),from=
  return r.closed&&(!search||(r.symbol+' '+r.direction).includes(search))&&(!from||day>=from)&&(!to||day<=to);
 }).sort((a,b)=>b.closed_at.localeCompare(a.closed_at));}
 function renderHistory(){if(!data)return;const rows=historyRows(),body=$('history');body.replaceChildren();page=Math.max(0,Math.min(page,Math.max(0,Math.ceil(rows.length/10)-1)));
- for(const r of rows.slice(page*10,page*10+10)){const tr=node('tr'),asset=node('td');asset.append(node('strong',cleanSymbol(r.symbol)),node('small',r.direction+' · '+r.timeframe));tr.append(asset);
+ for(const r of rows.slice(page*10,page*10+10)){const tr=node('tr'),asset=node('td');asset.append(node('strong',cleanSymbol(r.symbol)),node('small',r.direction+' · '+r.timeframe+(r.reconstruction?' · TP3 reconstruido':'')));tr.append(asset);
  [date(r.received_at),r.max_tp?'TP'+r.max_tp:'Sin TP',exitName(r)].forEach(v=>tr.append(node('td',v)));
  tr.append(node('td',pct(r.roi_pct),r.roi_pct>=0?'positive':'negative'));const cell=node('td'),button=node('button','Ver recorrido ↗');button.addEventListener('click',()=>choose(r.signal_id));cell.append(button);tr.append(cell);body.append(tr);}
  if(!rows.length){const td=node('td','No hay cierres para estos filtros.');td.colSpan=6;body.append(node('tr'));body.lastChild.append(td);}
@@ -28,6 +28,7 @@ function drawEquity(points,capital){const chart=$('equity');chart.replaceChildre
 }
 function featuredRows(){if(!data)return [];const ids=data.featured_signal_ids||data.signals.filter(r=>!r.closed&&publicPricesVisible(r)).map(r=>r.signal_id).slice(0,4);return ids.map(id=>data.signals.find(r=>r.signal_id===id)).filter(r=>r&&r.live_eligible!==false);}
 function livePerformance(r,mark){
+ if(signalIntegrityIssue(r,mark))return null;
  if(!publicPricesVisible(r)||r.closed||!Number.isFinite(mark)||mark<=0||!(r.entry_price>0)||!(r.margin_used>0))return null;
  const pnl=(r.recorded_partial_pnl_usdt||0)+(mark-r.entry_price)/r.entry_price*r.leverage*r.margin_used*r.remaining_fraction*(r.direction==='LONG'?1:-1);
  return {pnl_usdt:pnl,roi_pct:pnl/r.margin_used*100,realized_usdt:r.recorded_partial_pnl_usdt||0,floating_usdt:pnl-(r.recorded_partial_pnl_usdt||0)};
@@ -37,15 +38,15 @@ function renderOpen(){if(!data)return;const rows=data.signals.filter(r=>!r.close
  const ordered=[...featured,...rows.filter(r=>!ids.has(r.signal_id)).sort((a,b)=>b.received_at.localeCompare(a.received_at))];
  const note=$('featured-note');if(note)note.textContent=(data.featured_policy||'Selección de señales destacadas.')+' Se actualiza cada 30 segundos; los indicadores superiores incluyen todo el registro.';
  for(const r of ordered.slice(0,expanded?ordered.length:8)){const visible=publicPricesVisible(r),card=node('article',null,'live-card'+(visible?' preview-signal':' protected-signal')),head=node('div',null,'live-head');head.append(node('h3',cleanSymbol(r.symbol)),node('span',r.direction+' · '+r.timeframe,r.direction==='LONG'?'positive':'negative'));card.append(head);
- card.append(node('small',r.closed?'CERRADA · RESULTADO POSITIVO':visible?'ACTIVA · '+(r.featured_reason||'EJEMPLO PÚBLICO').toUpperCase():'ACTIVA · ACCESO EN LA APP', 'access-label'));
+ card.append(node('small',r.closed?'CERRADA · RESULTADO POSITIVO':r.integrity_note?'ESTADO EN REVISIÓN':visible?'ACTIVA · '+(r.featured_reason||'EJEMPLO PÚBLICO').toUpperCase():'ACTIVA · ACCESO EN LA APP', 'access-label'));
  const levels=node('div',null,'levels');for(let i=1;i<=3;i++)levels.append(node('span','TP'+i,i<=r.max_tp?'level hit':'level'));card.append(levels);
  const quoteFresh=lastMarkFetchAt&&Date.now()-lastMarkFetchAt<15000,serverFresh=r.quote_as_of&&Date.now()-Date.parse(r.quote_as_of)<15000;
  const current=quoteFresh?prices[pair(r.symbol)]:null;if(r.closed){card.classList.add('closed-highlight');card.append(node('p','Cierre: '+date(r.closed_at)),node('p',exitName(r)),node('p','Resultado cerrado: '+money(r.pnl_usdt)+' · '+pct(r.roi_pct),r.pnl_usdt>=0?'positive':'negative'));}
  else if(visible){card.append(node('p','Entrada: '+r.entry_price+' · Precio mark: '+(current??(serverFresh?r.open_performance?.mark_price:null)??'No disponible')),
  node('p','Stop de referencia: '+(r.be_activated?r.be_stop_price:r.original_stop)),node('p','Resultado registrado: '+money(r.recorded_partial_pnl_usdt)));
  const mark=(quoteFresh?liveMarkPrices['BITUNIX:'+pair(r.symbol)]:null)??(serverFresh?r.open_performance?.mark_price:null);
- const result=livePerformance(r,mark)||(serverFresh?r.open_performance:null);if(result){card.append(node('p','Flotante del remanente: '+money(result.floating_usdt)),node('p','Total abierto: '+money(result.pnl_usdt)+' · '+pct(result.roi_pct),result.pnl_usdt>=0?'positive':'negative'));}
- else card.append(node('p','Rendimiento abierto pendiente de cotización.'));}
+ const issue=signalIntegrityIssue(r,mark);const result=issue?null:(livePerformance(r,mark)||(serverFresh?r.open_performance:null));if(result){card.append(node('p','Flotante del remanente: '+money(result.floating_usdt)),node('p','Total abierto: '+money(result.pnl_usdt)+' · '+pct(result.roi_pct),result.pnl_usdt>=0?'positive':'negative'));}
+ else card.append(node('p',r.integrity_note||signalIntegrityIssue(r,mark)||'Rendimiento abierto pendiente de cotización.'));}
  else{card.append(node('div','↗','locked-icon'),node('p','Entrada, stop y objetivos reservados.','locked-copy'));const unlock=node('a','Consultar señal en la app ↗','unlock-link');unlock.href=data.app_url;unlock.target='_blank';unlock.rel='noopener';card.append(unlock);}
  const button=node('button',r.closed?'Ver resultado en el gráfico ↗':'Ver gráfico ↗','button');button.addEventListener('click',()=>choose(r.signal_id));card.append(button);grid.append(card);}
  if(!ordered.length)grid.append(node('p','No hay señales destacadas ni activas en este corte.'));

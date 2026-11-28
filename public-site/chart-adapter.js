@@ -2,7 +2,7 @@
 const CFG={leverage:20};
 let lastMarkFetchAt=0, liveMarkPrices={};
 function publicPricesVisible(r){return !!r&&(r.closed||r.prices_visible===true);}
-function chartRecord(r){return {id:r.signal_id,symbol:pair(r.symbol),direction:r.direction,timeframe:r.timeframe,
+function chartRecord(r){return {id:r.signal_id,symbol:pair(r.symbol),direction:r.direction,timeframe:r.timeframe,integrity_note:r.integrity_note,reconstruction_note:r.reconstruction?.note,
  entry_price:r.entry_price,stop_loss:r.original_stop,tp1:r.targets[0],tp2:r.targets[1],tp3:r.targets[2],
  hit_tp1:r.max_tp>=1,hit_tp2:r.max_tp>=2,hit_tp3:r.max_tp>=3,
  be_active:r.be_activated,current_sl:r.be_activated?r.entry_price:r.original_stop,

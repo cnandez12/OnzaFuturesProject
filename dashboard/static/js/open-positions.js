@@ -64,10 +64,10 @@ function updateLivePnl() {
     const netBig = card.querySelector('.p-net-big');
     if (markEl) markEl.textContent = mark ? fmtP(mark) : 'Sin cotización vigente';
     if (flEl) {
-      flEl.textContent = mark
+      flEl.textContent = pnl.issue ? 'En revisión' : flUsdt!==null
         ? (flUsdt >= 0 ? '+' : '-') + '$' + Math.abs(flUsdt).toFixed(2)
         : '—';
-      flEl.style.color = mark ? (flUsdt >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text3)';
+      flEl.style.color = flUsdt!==null ? (flUsdt >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text3)';
     }
     if (netEl) {
       netEl.textContent = netPct !== null
@@ -78,7 +78,7 @@ function updateLivePnl() {
     if (netBig) {
       netBig.textContent = netPct !== null
         ? (netPct >= 0 ? '+' : '') + netPct.toFixed(2) + '%'
-        : '—';
+        : pnl.issue?'En revisión':'—';
       netBig.style.color = netPct !== null ? (netUsdt >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text3)';
     }
   });

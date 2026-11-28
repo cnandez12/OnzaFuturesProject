@@ -5,9 +5,10 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from audit_scenarios import MODES, evaluate, summarize
+from web_evidence import scenario_events
 
 AUDIT_SQL = """SELECT e.signal_id, s.id IS NOT NULL AS signal_exists,
-    s.exchange, s.margin_used, s.be_activated_at,
+    s.id AS signal_pk, s.exchange, s.margin_used, s.be_activated_at,
     (to_jsonb(s)->>'be_stop_price')::numeric AS stored_be_stop_price,
     e.id,e.event_type,e.payload,e.received_at,e.applied_at,e.telegram_status,e.state,e.error,
     r.final_profit_usdt AS recorded_pnl
@@ -48,7 +49,7 @@ def build_report(event_rows, *, mode, fallback_margin="20", filters=None, margin
     for sid, events in grouped.items():
         events.sort(key=lambda e: (e["received_at"], e["id"]))
         raw = [public_event(e) for e in events]
-        applied = [dict(e, typeSignal=e["event_type"]) for e in events if e.get("state", "applied") == "applied"]
+        applied, reconstruction = scenario_events(events)
         entry = next((e for e in applied if e["event_type"] == "entry"), None)
         if entry is None or not events[0].get("signal_exists", True):
             incidents.append({"signal_id": sid, "symbol": events[0]["payload"].get("symbol"),
@@ -82,18 +83,20 @@ def build_report(event_rows, *, mode, fallback_margin="20", filters=None, margin
             continue
         result = dict(scenarios[mode])
         recorded = meta.get("recorded_pnl")
-        source_baseline = (evaluate(sid, applied, mode="partial_no_be", margin=source_margin)
+        original_applied = [dict(e,typeSignal=e["event_type"]) for e in events if e.get("state","applied")=="applied"]
+        source_baseline = (evaluate(sid, original_applied, mode="partial_no_be", margin=source_margin)
                            if margin_override is not None or risk_override is not None else baseline)
         difference = (round(float(Decimal(str(source_baseline["pnl_usdt"])) - Decimal(str(recorded))), 2)
-                      if baseline["closed"] and recorded is not None else None)
+                      if source_baseline["closed"] and recorded is not None else None)
         result.update({"source_margin_used": float(source_margin), "presentation_only": margin_override is not None or risk_override is not None, "source_exchange": meta.get("exchange"), "margin_recorded": meta.get("margin_used") is not None,
                        "be_persisted": meta.get("be_activated_at") is not None,
                        "stored_be_stop_price": float(meta["stored_be_stop_price"]) if meta.get("stored_be_stop_price") is not None else None,
                        "telegram_counts": dict(Counter(str(e.get("telegram_status")) for e in events)),
                        "recorded_pnl_usdt": round(float(recorded), 2) if recorded is not None else None,
                        "reconciliation_difference_usdt": difference,
-                       "reconciliation_status": "match" if difference == 0 else "mismatch" if difference is not None else "missing_record" if baseline["closed"] else "open",
-                       "events": raw, "scenarios": scenarios})
+                       "reconciliation_status": "reconstructed" if reconstruction else "match" if difference == 0 else "mismatch" if difference is not None else "missing_record" if baseline["closed"] else "open",
+                       "integrity_note": "Actualización de salida recibida pendiente de conciliación" if not result["closed"] and any(e.get("state") in ("pending","rejected") and e["event_type"] in ("tp3","sl","close") for e in events) else None,
+                       "signal_pk": meta.get("signal_pk"), "reconstruction": reconstruction, "events": raw, "scenarios": scenarios})
         rows.append(result)
         for key in MODES:
             comparison_rows[key].append(scenarios[key])
@@ -108,6 +111,7 @@ def build_report(event_rows, *, mode, fallback_margin="20", filters=None, margin
                          "selected_signals": len(rows)},
             "reconciliation": {"matched": len(reconciled), "mismatched": sum(r["reconciliation_status"] == "mismatch" for r in rows),
                                "missing": sum(r["reconciliation_status"] == "missing_record" for r in rows),
+                               "reconstructed":sum(bool(r["reconstruction"]) for r in rows),
                                "difference_usdt": round(sum(r["reconciliation_difference_usdt"] or 0 for r in rows), 2)},
             "incidents": incidents,
             "policy": {"be": "TP1 activa automáticamente el stop en entrada sobre el remanente; se aplica solo en partial_be.",

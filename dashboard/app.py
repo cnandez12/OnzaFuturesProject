@@ -84,7 +84,11 @@ def query(sql, params=(), fetch_all=False, fetch_one=False):
     try:
         conn = db_pool.getconn()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            sql, params = project_sql(sql, params, INITIAL_BALANCE)
+            recovered=[]
+            if "final_profit" in sql or ("FROM trades" in sql and "pnl_accumulated" in sql):
+                from web_reconciliation import recovered_rows
+                recovered=recovered_rows(cur)
+            sql, params = project_sql(sql, params, INITIAL_BALANCE,recovered=recovered)
             cur.execute(sql, params)
             if fetch_all:
                 return cur.fetchall()
@@ -146,10 +150,15 @@ def rows_to_list(rows):
     result = []
     for row in rows:
         d = dict(row)
+        if d.pop("unconfirmed_exit",False):
+            d["integrity_note"]="Actualización de salida recibida pendiente de conciliación"
         if "margin_used" in d:
             d["risk_usdt"] = float(RISK_PER_TRADE)
         if "final_profit_usdt" in d:
             d["display_mode"] = "partial_be"
+            if d.get("id",0)<0:
+                d["source"]="reconciled_alerts"
+                d["reconstruction_note"]="TP3 recibido; parciales faltantes reconstruidos a objetivos"
         for k, v in d.items():
             if hasattr(v, '__float__'):
                 d[k] = float(v)
@@ -260,7 +269,8 @@ def api_pulse():
                   (SELECT md5(COALESCE(string_agg(concat_ws('|', message_id, pair,
                     tp1_filled, tp2_filled, tp3_filled, be_active, current_sl,
                     pnl_accumulated, tp1_fill_price, tp2_fill_price), ';' ORDER BY message_id), ''))
-                   FROM trades WHERE close = FALSE) AS open_state
+                   FROM trades WHERE close = FALSE) AS open_state,
+                  (SELECT MAX(id) FROM tv_events) AS latest_event_id
         """,
         fetch_one=True,
     )
@@ -269,7 +279,7 @@ def api_pulse():
             "total":       int(row["total"] or 0),
             "last_closed": row["last_closed"].isoformat() if row["last_closed"] else None,
             "open_count":  int(row["open_count"] or 0),
-            "open_state":  row["open_state"],
+            "open_state":  str(row["open_state"])+":"+str(row.get("latest_event_id","")),
         })
     return jsonify({"error": "Database unavailable"}), 503
 
@@ -280,6 +290,7 @@ def api_open():
         """
         SELECT message_id AS id, pair, side AS direction, source_exchange,
                (SELECT split_part(s.signal_id,'_',2) FROM tv_signals s WHERE s.id=message_id) AS timeframe,
+               EXISTS(SELECT 1 FROM tv_events e JOIN tv_signals z ON z.signal_id=e.signal_id WHERE z.id=message_id AND e.state IN ('pending','rejected') AND e.event_type IN ('tp3','sl','close')) AS unconfirmed_exit,
                display_margin_used AS margin_used, leverage,
                entry, stop_loss, tp1, tp2, tp3,
                tp1_filled, tp2_filled, tp3_filled, date,
@@ -447,6 +458,7 @@ def api_chart_signals():
         """
         SELECT message_id AS id, pair AS symbol, side AS direction,
                (SELECT split_part(s.signal_id,'_',2) FROM tv_signals s WHERE s.id=message_id) AS timeframe,
+               EXISTS(SELECT 1 FROM tv_events e JOIN tv_signals z ON z.signal_id=e.signal_id WHERE z.id=message_id AND e.state IN ('pending','rejected') AND e.event_type IN ('tp3','sl','close')) AS unconfirmed_exit,
                display_margin_used AS margin_used, leverage,
                entry AS entry_price, stop_loss,
                tp1, tp2, tp3,
@@ -489,7 +501,8 @@ def api_chart_poll():
             (SELECT md5(COALESCE(string_agg(concat_ws('|', message_id, pair,
                 tp1_filled, tp2_filled, tp3_filled, be_active, current_sl,
                 pnl_accumulated, tp1_fill_price, tp2_fill_price), ';' ORDER BY message_id), ''))
-             FROM trades WHERE close = FALSE AND (pair = %s OR pair = %s)) AS open_state
+             FROM trades WHERE close = FALSE AND (pair = %s OR pair = %s)) AS open_state,
+                  (SELECT MAX(id) FROM tv_events) AS latest_event_id
         """,
         (symbol_raw, symbol_slash, symbol_raw, symbol_slash, symbol_raw, symbol_slash,
          symbol_raw, symbol_slash),
@@ -501,7 +514,7 @@ def api_chart_poll():
             "open_count":  int(row.get("open_count") or 0),
             "last_closed": row["last_closed"].isoformat() if row.get("last_closed") else None,
             "last_opened": row["last_opened"].isoformat() if row.get("last_opened") else None,
-            "open_state": row["open_state"],
+            "open_state": str(row["open_state"])+":"+str(row.get("latest_event_id","")),
         })
     return jsonify({"error": "Database unavailable"}), 503
 
