@@ -121,7 +121,7 @@ def evaluate(signal_id: str, events: list[dict], *, mode: str, margin,
                     exit_be(moment, inferred=event.get("basis")!="market_candle_reference")
                 else:
                     add_leg(kind.upper(), price, remaining, moment, event.get("basis","recorded_alert"))
-                    close_reason, closed_at = kind.upper(), moment
+                    close_reason, closed_at = ("SIGNAL_OPPOSITE" if event.get("basis")=="opposite_signal_reference" else kind.upper()), moment
                 break
         if mode == "partial_be" and remaining > 0 and tp1 and be_observed:
             exit_be(be_hit_at)

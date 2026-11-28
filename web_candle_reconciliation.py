@@ -30,23 +30,24 @@ def valid_record(record,events):
             fingerprint(anchors)==record.get("anchor_fingerprint"))
 
 def supplement(signal_id,events,applied,mode):
-    record=EVIDENCE.get(signal_id)
+    record=next((e.get("web_evidence") for e in events if e.get("web_evidence")),None) or EVIDENCE.get(signal_id)
     if mode!="partial_be" or not valid_record(record,events):return applied,None
     if not record.get("observations"):return applied,None
     closing=next((o for o in record["observations"] if o["kind"] in ("sl","close","tp3")),None)
-    close_at=(closing["bar"]["time"]+60000)/1000 if closing else float("inf")
+    close_at=(closing.get("at",closing.get("bar",{}).get("time",0)+60000))/1000 if closing else float("inf")
     if any(e["event_type"] in ("sl","close","tp3") and e.get("state","applied")=="applied" and
            (e.get("applied_at") or e["received_at"]).timestamp()<=close_at for e in events):return applied,None
     initial=next(e for e in applied if e["event_type"]=="entry")
     extra=[]
     for i,o in enumerate(record["observations"]):
-        at=datetime.fromtimestamp((o["bar"]["time"]+60000)/1000,timezone.utc)
+        at=datetime.fromtimestamp(o.get("at",o.get("bar",{}).get("time",0)+60000)/1000,timezone.utc)
         extra.append(dict(initial,id=1000000000+i,event_type=o["kind"],typeSignal=o["kind"],received_at=at,applied_at=None,
-                          payload=dict(initial["payload"],price=o["price"]),basis="market_candle_reference"))
+                          payload=dict(initial["payload"],price=o["price"]),basis=o.get("basis","market_candle_reference")))
     ambiguous=sum(bool(o.get("ambiguous")) for o in record["observations"])
     replaced={e["event_type"] for e in extra}
     retained=[e for e in applied if e["event_type"] not in replaced]
     return [*retained,*extra],{"kind":"market_candles","source":record.get("source","Bitunix Futures LAST_PRICE"),"as_of":record["as_of"],
         "received_pending_event_ids":[],"inferred_targets":[o["kind"] for o in record["observations"] if o["kind"].startswith("tp")],
         "precision":"1m","ambiguous_candles":ambiguous,
-        "note":"Escenario conciliado con velas de 1 minuto de Bitunix desde el minuto completo posterior a TP1 (o a la entrada si aún no había TP1). Hora aproximada al fin de vela; stop prioritario ante cruce simultáneo. No confirma ejecución del broker."}
+        "sync_status":record.get("sync_status","snapshot"),
+        "note":"Escenario web conciliado con velas completas de 1 minuto de Bitunix y alertas registradas. Hora de cruce aproximada al fin de vela; stop prioritario ante cruce simultáneo. Una señal contraria del mismo activo y temporalidad termina el seguimiento. No confirma ejecución del broker."}

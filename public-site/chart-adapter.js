@@ -10,7 +10,7 @@ function chartRecord(r){return {id:r.signal_id,symbol:pair(r.symbol),direction:r
  final_profit_pct:r.roi_pct,final_profit_usdt:r.pnl_usdt,close_reason:r.close_reason,
  opened_at:r.received_at,closed_at:r.closed_at};}
 function fmtScenario(r){const tp=r.hit_tp3?'TP3':r.hit_tp2?'TP2':r.hit_tp1?'TP1':'';
- return tp+(r.close_reason?.startsWith('BE')?' · BE':r.close_reason==='SL'?' · SL':r.close_reason==='CLOSE'?' · CLOSE':'')||r.close_reason;}
+ return tp+(r.close_reason?.startsWith('BE')?' · BE':r.close_reason==='SL'?' · SL':(r.close_reason==='CLOSE'||r.close_reason==='SIGNAL_OPPOSITE')?' · CLOSE':'')||r.close_reason;}
 async function fetchJson(path){
  const url=new URL(path,location.origin),symbol=url.searchParams.get('symbol');
  const signals=(data?.signals||[]).filter(r=>publicPricesVisible(r)&&(!symbol||pair(r.symbol)===symbol));

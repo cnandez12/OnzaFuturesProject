@@ -1,24 +1,31 @@
 """Read-only web rows reconciled from alerts and versioned candle evidence."""
 import threading
 import time
+from datetime import datetime,timezone
 from audit_reporting import AUDIT_SQL, build_report
 from presentation_config import RISK_PER_TRADE
 
 _lock=threading.Lock()
 _cache=(None,[])
 _integrity={}
+_open_notes={}
 
 
 def recovered_rows(cur):
-    global _cache,_integrity
+    global _cache,_integrity,_open_notes
     with _lock:
         cur.execute("SELECT COALESCE(MAX(id),0) AS latest,COUNT(*) FILTER(WHERE state='pending') AS pending,MAX(applied_at) AS applied FROM tv_events")
         version=dict(cur.fetchone())
+        cur.execute("SELECT COALESCE(MAX(revision),0) AS revision FROM web_audit.evidence")
+        version["web_revision"]=cur.fetchone()["revision"]
+        cur.execute("SELECT last_completed_at FROM web_audit.health WHERE id=1")
+        health=cur.fetchone();version["web_completed"]=health["last_completed_at"] if health else None
         if version==_cache[0]:return _cache[1]
         cur.execute(AUDIT_SQL)
         report=build_report(cur.fetchall(),mode="partial_be",risk_override=RISK_PER_TRADE)
-        _integrity=report["integrity"]
+        _integrity=dict(report["integrity"],web_revision=version["web_revision"],automatic_reconciliation=report["automatic_reconciliation"])
         if report["integrity"]["math_errors"]:raise RuntimeError("La verificación matemática del histórico requiere revisión")
+        _open_notes={int(r["signal_pk"]):r.get("integrity_note") for r in report["rows"] if not r["closed"] and r.get("signal_pk")}
         records=[]
         for row in report["rows"]:
             if not row["reconstruction"] or not row.get("signal_pk"):continue
@@ -43,4 +50,16 @@ def note_for_record(record_id):
 
 
 def integrity_status():
-    with _lock:return dict(_integrity)
+    with _lock:
+        result=dict(_integrity)
+        auto=dict(result.get("automatic_reconciliation") or {})
+        completed=auto.get("last_completed_at")
+        if auto.get("enabled") and (not completed or (datetime.now(timezone.utc)-datetime.fromisoformat(completed)).total_seconds()>240):auto["status"]="stale"
+        result["automatic_reconciliation"]=auto
+        return result
+
+
+def open_note_for_record(record_id):
+    auto=integrity_status().get("automatic_reconciliation",{})
+    if auto.get("enabled") and auto.get("status")=="stale":return "Conciliación automática de mercado pendiente; rendimiento en revisión"
+    with _lock:return _open_notes.get(record_id)

@@ -155,7 +155,9 @@ def rows_to_list(rows):
         if "margin_used" in d:
             d["risk_usdt"] = float(RISK_PER_TRADE)
             if "final_profit_usdt" not in d:
-                from web_reconciliation import note_for_record
+                from web_reconciliation import note_for_record,open_note_for_record
+                pending=open_note_for_record(d.get("id"))
+                if pending:d["integrity_note"]=pending
                 note=note_for_record(d.get("id"))
                 if note:d["reconstruction_note"]=note
         if "final_profit_usdt" in d:
@@ -285,7 +287,7 @@ def api_pulse():
             "total":       int(row["total"] or 0),
             "last_closed": row["last_closed"].isoformat() if row["last_closed"] else None,
             "open_count":  int(row["open_count"] or 0),
-            "open_state":  str(row["open_state"])+":"+str(row.get("latest_event_id","")),
+            "open_state":  str(row["open_state"])+":"+str(row.get("latest_event_id",""))+":"+str(__import__("web_reconciliation").integrity_status().get("web_revision",0)),
             "web_integrity": integrity_status(),
         })
     return jsonify({"error": "Database unavailable"}), 503
@@ -521,7 +523,7 @@ def api_chart_poll():
             "open_count":  int(row.get("open_count") or 0),
             "last_closed": row["last_closed"].isoformat() if row.get("last_closed") else None,
             "last_opened": row["last_opened"].isoformat() if row.get("last_opened") else None,
-            "open_state": str(row["open_state"])+":"+str(row.get("latest_event_id","")),
+            "open_state": str(row["open_state"])+":"+str(row.get("latest_event_id",""))+":"+str(__import__("web_reconciliation").integrity_status().get("web_revision",0)),
         })
     return jsonify({"error": "Database unavailable"}), 503
 

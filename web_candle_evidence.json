@@ -555,5 +555,312 @@
       1603
     ],
     "anchor_fingerprint": "3b29a20aeea9aa37ff088eace11745bf0004e0e6afe06a14ced3ca05bc228c6b"
+  },
+  "APEUSD.P_30M_1795791600000": {
+    "signal_id": "APEUSD.P_30M_1795791600000",
+    "status": "open",
+    "start": 1795793460000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 21,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "deb217e0d42e6eaf90351d3483addcd1a741fcd056abd5c51b0ab0f388f50889",
+    "entry_fingerprint": "deb217e0d42e6eaf90351d3483addcd1a741fcd056abd5c51b0ab0f388f50889",
+    "anchor_ids": [
+      2312
+    ],
+    "anchor_fingerprint": "deb217e0d42e6eaf90351d3483addcd1a741fcd056abd5c51b0ab0f388f50889"
+  },
+  "CAKEUSD.P_30M_1795791600000": {
+    "signal_id": "CAKEUSD.P_30M_1795791600000",
+    "status": "open",
+    "start": 1795793460000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 21,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "fb55d9f601c42b157a6c7b39987b9f571d391ce1199fc0175a23992f0a60686b",
+    "entry_fingerprint": "fb55d9f601c42b157a6c7b39987b9f571d391ce1199fc0175a23992f0a60686b",
+    "anchor_ids": [
+      2311
+    ],
+    "anchor_fingerprint": "fb55d9f601c42b157a6c7b39987b9f571d391ce1199fc0175a23992f0a60686b"
+  },
+  "ETHUSD.P_30M_1795791600000": {
+    "signal_id": "ETHUSD.P_30M_1795791600000",
+    "status": "open",
+    "start": 1795793460000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 21,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "7cd208bc3bf81abf81be0cb1496cdffabe80ce9cd10e7b8b429be059571398d8",
+    "entry_fingerprint": "7cd208bc3bf81abf81be0cb1496cdffabe80ce9cd10e7b8b429be059571398d8",
+    "anchor_ids": [
+      2310
+    ],
+    "anchor_fingerprint": "7cd208bc3bf81abf81be0cb1496cdffabe80ce9cd10e7b8b429be059571398d8"
+  },
+  "ONDOUSD.P_30M_1795791600000": {
+    "signal_id": "ONDOUSD.P_30M_1795791600000",
+    "status": "open",
+    "start": 1795793460000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 21,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "3200a479146d7cd4a9bb78973e416227867e19e93153cc476bba8e496685d21b",
+    "entry_fingerprint": "3200a479146d7cd4a9bb78973e416227867e19e93153cc476bba8e496685d21b",
+    "anchor_ids": [
+      2308
+    ],
+    "anchor_fingerprint": "3200a479146d7cd4a9bb78973e416227867e19e93153cc476bba8e496685d21b"
+  },
+  "ADAUSD.P_30M_1795791600000": {
+    "signal_id": "ADAUSD.P_30M_1795791600000",
+    "status": "open",
+    "start": 1795793460000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 21,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "66c6c8bfd61d25da39b8ef0949334f0fe9919469dce6fa36e152b14d50e2fc80",
+    "entry_fingerprint": "66c6c8bfd61d25da39b8ef0949334f0fe9919469dce6fa36e152b14d50e2fc80",
+    "anchor_ids": [
+      2307
+    ],
+    "anchor_fingerprint": "66c6c8bfd61d25da39b8ef0949334f0fe9919469dce6fa36e152b14d50e2fc80"
+  },
+  "ZENUSD.P_30M_1795791600000": {
+    "signal_id": "ZENUSD.P_30M_1795791600000",
+    "status": "open",
+    "start": 1795793460000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 21,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "5bd2fe2e7581e2490e0c480c7c8c2b976d4a10b7f7aaa9b2701f7c2e69260bee",
+    "entry_fingerprint": "5bd2fe2e7581e2490e0c480c7c8c2b976d4a10b7f7aaa9b2701f7c2e69260bee",
+    "anchor_ids": [
+      2304
+    ],
+    "anchor_fingerprint": "5bd2fe2e7581e2490e0c480c7c8c2b976d4a10b7f7aaa9b2701f7c2e69260bee"
+  },
+  "XLMUSD.P_30M_1795791600000": {
+    "signal_id": "XLMUSD.P_30M_1795791600000",
+    "status": "open",
+    "start": 1795793460000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 21,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "9eb2340eae02a5c2635476d16df9334239cadc318d013d6390a3dab4c06915bc",
+    "entry_fingerprint": "9eb2340eae02a5c2635476d16df9334239cadc318d013d6390a3dab4c06915bc",
+    "anchor_ids": [
+      2302
+    ],
+    "anchor_fingerprint": "9eb2340eae02a5c2635476d16df9334239cadc318d013d6390a3dab4c06915bc"
+  },
+  "SUIUSD.P_30M_1795791600000": {
+    "signal_id": "SUIUSD.P_30M_1795791600000",
+    "status": "open",
+    "start": 1795793460000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 21,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "704bae4c6fba9c54ef3f5e5e83e59f1b34d799dc73d2c5154fe37c5f3d7765b1",
+    "entry_fingerprint": "704bae4c6fba9c54ef3f5e5e83e59f1b34d799dc73d2c5154fe37c5f3d7765b1",
+    "anchor_ids": [
+      2301
+    ],
+    "anchor_fingerprint": "704bae4c6fba9c54ef3f5e5e83e59f1b34d799dc73d2c5154fe37c5f3d7765b1"
+  },
+  "XRPUSD.P_30M_1795791600000": {
+    "signal_id": "XRPUSD.P_30M_1795791600000",
+    "status": "open",
+    "start": 1795793460000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 21,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "13ebe1d1decc4df17600a55b949a96b700e1f3e85d80fbf9dcbf5910871eed37",
+    "entry_fingerprint": "13ebe1d1decc4df17600a55b949a96b700e1f3e85d80fbf9dcbf5910871eed37",
+    "anchor_ids": [
+      2300
+    ],
+    "anchor_fingerprint": "13ebe1d1decc4df17600a55b949a96b700e1f3e85d80fbf9dcbf5910871eed37"
+  },
+  "AVAXUSD.P_30M_1795791600000": {
+    "signal_id": "AVAXUSD.P_30M_1795791600000",
+    "status": "open",
+    "start": 1795793460000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 21,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "0dd13630765eb8ce2dcb0ed2b76a724e055f2f3b8f6e5504367b380323f98072",
+    "entry_fingerprint": "0dd13630765eb8ce2dcb0ed2b76a724e055f2f3b8f6e5504367b380323f98072",
+    "anchor_ids": [
+      2299
+    ],
+    "anchor_fingerprint": "0dd13630765eb8ce2dcb0ed2b76a724e055f2f3b8f6e5504367b380323f98072"
+  },
+  "DOTUSD.P_30M_1795791600000": {
+    "signal_id": "DOTUSD.P_30M_1795791600000",
+    "status": "open",
+    "start": 1795793460000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 21,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "3c4822953e4b107b011fcfdb40b14d2d08c712729534f0d13a3f2c0b68cf0c99",
+    "entry_fingerprint": "3c4822953e4b107b011fcfdb40b14d2d08c712729534f0d13a3f2c0b68cf0c99",
+    "anchor_ids": [
+      2297
+    ],
+    "anchor_fingerprint": "3c4822953e4b107b011fcfdb40b14d2d08c712729534f0d13a3f2c0b68cf0c99"
+  },
+  "BTCUSD.P_30M_1795791600000": {
+    "signal_id": "BTCUSD.P_30M_1795791600000",
+    "status": "open",
+    "start": 1795793460000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 21,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "664ccd865b1af4190f91c7a318750896bf809179b6580d739d7b6a1b15b26d6e",
+    "entry_fingerprint": "664ccd865b1af4190f91c7a318750896bf809179b6580d739d7b6a1b15b26d6e",
+    "anchor_ids": [
+      2296
+    ],
+    "anchor_fingerprint": "664ccd865b1af4190f91c7a318750896bf809179b6580d739d7b6a1b15b26d6e"
+  },
+  "AAVEUSD.P_15M_1795790700000": {
+    "signal_id": "AAVEUSD.P_15M_1795790700000",
+    "status": "open",
+    "start": 1795791660000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 21,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "c9154617c5713412110216a78a9bfc5008954a58e55030c648a9cb4946630e2f",
+    "entry_fingerprint": "c9154617c5713412110216a78a9bfc5008954a58e55030c648a9cb4946630e2f",
+    "anchor_ids": [
+      2292
+    ],
+    "anchor_fingerprint": "c9154617c5713412110216a78a9bfc5008954a58e55030c648a9cb4946630e2f"
+  },
+  "SUIUSD.P_15M_1795790700000": {
+    "signal_id": "SUIUSD.P_15M_1795790700000",
+    "status": "open",
+    "start": 1795791660000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 21,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "2277e1e12c4bee518210a2f70b4726135ae0bd0014e3dbaa5019d8931ab65d6f",
+    "entry_fingerprint": "2277e1e12c4bee518210a2f70b4726135ae0bd0014e3dbaa5019d8931ab65d6f",
+    "anchor_ids": [
+      2290
+    ],
+    "anchor_fingerprint": "2277e1e12c4bee518210a2f70b4726135ae0bd0014e3dbaa5019d8931ab65d6f"
+  },
+  "1000PEPEUSD.P_15M_1795790700000": {
+    "signal_id": "1000PEPEUSD.P_15M_1795790700000",
+    "status": "open",
+    "start": 1795791660000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 21,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "a7275291f48587a4dd234e8131978814ab13f5c37927f92e7af129d46e2fcc90",
+    "entry_fingerprint": "a7275291f48587a4dd234e8131978814ab13f5c37927f92e7af129d46e2fcc90",
+    "anchor_ids": [
+      2287
+    ],
+    "anchor_fingerprint": "a7275291f48587a4dd234e8131978814ab13f5c37927f92e7af129d46e2fcc90"
+  },
+  "DOTUSD.P_15M_1795789800000": {
+    "signal_id": "DOTUSD.P_15M_1795789800000",
+    "status": "open",
+    "start": 1795790820000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 22,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "b249223260e72e46c4fe2c15513098d8927f09738d48dab114f4d324f2447aef",
+    "entry_fingerprint": "727f0fe21959994971f5a8062e2f9cfea073de348e7c7d85aa86b483a27cd316",
+    "anchor_ids": [
+      2281,
+      2283
+    ],
+    "anchor_fingerprint": "b249223260e72e46c4fe2c15513098d8927f09738d48dab114f4d324f2447aef"
+  },
+  "ZENUSD.P_15M_1795789800000": {
+    "signal_id": "ZENUSD.P_15M_1795789800000",
+    "status": "open",
+    "start": 1795790820000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 22,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "8f2b47fe979b3211ffd7a9a48245f3575f6e1c5e408fa593bef7a62ff215b33b",
+    "entry_fingerprint": "be065860f729f0ed052da9635b24d061ad1dac734a26f45220ba3b5125d4f14a",
+    "anchor_ids": [
+      2280,
+      2282
+    ],
+    "anchor_fingerprint": "8f2b47fe979b3211ffd7a9a48245f3575f6e1c5e408fa593bef7a62ff215b33b"
+  },
+  "XPLUSD.P_1H_1795629600000": {
+    "signal_id": "XPLUSD.P_1H_1795629600000",
+    "status": "open",
+    "start": 1795633260000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 65,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "ec4f03c6e2b4fa63c0bec25f2c0f03ee84f51063987bb8c0f0a0c6efe9e1144f",
+    "entry_fingerprint": "ec4f03c6e2b4fa63c0bec25f2c0f03ee84f51063987bb8c0f0a0c6efe9e1144f",
+    "anchor_ids": [
+      2202
+    ],
+    "anchor_fingerprint": "ec4f03c6e2b4fa63c0bec25f2c0f03ee84f51063987bb8c0f0a0c6efe9e1144f"
+  },
+  "TRXUSD.P_1H_1795618800000": {
+    "signal_id": "TRXUSD.P_1H_1795618800000",
+    "status": "open",
+    "start": 1795794660000,
+    "end": 1795868400000,
+    "observations": [],
+    "coarse_bars_checked": 21,
+    "as_of": 1795868400000,
+    "source": "Bitunix Futures LAST_PRICE",
+    "fingerprint": "40848c204e32ad4493bf23b758104a37dc0f7650576d9ab5533d97fa9d764018",
+    "entry_fingerprint": "46069c1714ce4496264a082aaaf42aadde7d4ed27b7f1a94f3ec8f26361ffa58",
+    "anchor_ids": [
+      2195,
+      2313
+    ],
+    "anchor_fingerprint": "40848c204e32ad4493bf23b758104a37dc0f7650576d9ab5533d97fa9d764018"
   }
 }

@@ -8,13 +8,19 @@ from audit_scenarios import MODES, evaluate, summarize
 from web_history_integrity import describe_gap, summarize_integrity, is_archived
 from web_evidence import scenario_events
 from web_candle_reconciliation import supplement
+from web_opposites import first_opposites,apply_opposite
 
 AUDIT_SQL = """SELECT e.signal_id, s.id IS NOT NULL AS signal_exists,
     s.id AS signal_pk, s.exchange, s.margin_used, s.be_activated_at,
     (to_jsonb(s)->>'be_stop_price')::numeric AS stored_be_stop_price,
     e.id,e.event_type,e.payload,e.received_at,e.applied_at,e.telegram_status,e.state,e.error,
-    r.final_profit_usdt AS recorded_pnl
+    r.final_profit_usdt AS recorded_pnl,
+    w.record AS web_evidence,w.revision AS web_revision,
+    h.enabled AS web_auto_enabled,h.heartbeat_at AS web_heartbeat,h.last_completed_at AS web_last_completed_at,
+    h.status AS web_auto_status,h.detail AS web_auto_detail
     FROM tv_events e LEFT JOIN tv_signals s ON s.signal_id=e.signal_id
+    LEFT JOIN web_audit.evidence w ON w.signal_id=e.signal_id
+    LEFT JOIN web_audit.health h ON h.id=1
     LEFT JOIN trades t ON t.message_id=s.id
     LEFT JOIN LATERAL (
       SELECT final_profit_usdt FROM sim_track_record r
@@ -43,6 +49,7 @@ def build_report(event_rows, *, mode, fallback_margin="20", filters=None, margin
     if status not in ("all", "closed", "open"):
         raise ValueError("Estado de auditoría inválido")
     search = filters.get("search", "").strip().upper()
+    opposites=first_opposites(event_rows)
     grouped = defaultdict(list)
     for e in event_rows:
         grouped[e["signal_id"]].append(e)
@@ -70,11 +77,15 @@ def build_report(event_rows, *, mode, fallback_margin="20", filters=None, margin
             if risk_override is not None:
                 from presentation_config import risk_margin
                 margin = risk_margin(entry["payload"],risk_override)
-            _, market_reconstruction = supplement(sid,events,applied,mode)
-            if market_reconstruction:reconstruction=market_reconstruction
             scenarios={}
             for key in sorted(MODES):
-                selected_events,_=supplement(sid,events,applied,key)
+                selected_events,market_reconstruction=supplement(sid,events,applied,key)
+                selected_events,opposite_reconstruction=apply_opposite(selected_events,opposites.get(sid),events)
+                if key==mode:
+                    if market_reconstruction:reconstruction=market_reconstruction
+                    if opposite_reconstruction:
+                        note=(reconstruction["note"]+" ") if reconstruction else ""
+                        reconstruction=dict(opposite_reconstruction,note=note+opposite_reconstruction["note"])
                 scenarios[key]=evaluate(sid,selected_events,mode=key,margin=margin,
                                         be_activated_at=meta.get("be_activated_at"))
         except (ValueError, KeyError, ArithmeticError) as exc:
@@ -108,6 +119,12 @@ def build_report(event_rows, *, mode, fallback_margin="20", filters=None, margin
                        "reconciliation_status": "reconstructed" if reconstruction else "match" if difference == 0 else "mismatch" if difference is not None else "missing_record" if baseline["closed"] else "open",
                        "integrity_note": "Actualización de salida recibida pendiente de conciliación" if not result["closed"] and any(e.get("state") in ("pending","rejected") and e["event_type"] in ("tp3","sl","close") for e in events) else None,
                        "signal_pk": meta.get("signal_pk"), "reconstruction": reconstruction, "events": raw, "scenarios": scenarios})
+        if not result["closed"] and meta.get("web_auto_enabled") and result["symbol"]!="EPICUSD.P":
+            proof=meta.get("web_evidence")
+            completed=meta.get("web_last_completed_at")
+            stale=not completed or (datetime.now(timezone.utc)-completed).total_seconds()>240
+            if stale or not proof or proof.get("sync_status") not in ("ok",None) or proof.get("as_of",0)<datetime.now(timezone.utc).timestamp()*1000-240000:
+                result["integrity_note"]="Conciliación automática de mercado pendiente o sin cobertura; rendimiento en revisión"
         rows.append(result)
         for key in MODES:
             comparison_rows[key].append(scenarios[key])
@@ -127,6 +144,10 @@ def build_report(event_rows, *, mode, fallback_margin="20", filters=None, margin
                                "missing": sum(r["reconciliation_status"] == "missing_record" for r in rows),
                                "reconstructed":sum(bool(r["reconstruction"]) for r in rows),
                                "difference_usdt": round(sum(r["reconciliation_difference_usdt"] or 0 for r in rows), 2)},
+            "automatic_reconciliation": {"enabled":bool(event_rows and event_rows[0].get("web_auto_enabled")),
+                "last_completed_at":event_rows[0]["web_last_completed_at"].isoformat() if event_rows and event_rows[0].get("web_last_completed_at") else None,
+                "status":event_rows[0].get("web_auto_status") if event_rows else None,
+                "detail":event_rows[0].get("web_auto_detail") if event_rows else None},
             "incidents": visible_incidents, "archive":{"groups":len(archived),"events":sum(len(i["events"]) for i in archived),"excluded_from_pnl":True}, "integrity":summarize_integrity(rows,incidents),
             "policy": {"be": "TP1 activa automáticamente el stop en entrada sobre el remanente; se aplica solo en partial_be.",
                        "be_exit": "Una salida adversa después de TP1 simula BE en entrada. El evento no proporciona la hora exacta del cruce.",
