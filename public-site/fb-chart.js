@@ -1114,8 +1114,10 @@ function fbSyncZones() {
         el.style.display='none'; if (z._dot) z._dot.style.display='none'; continue;
       }
       el.style.display='flex';
-      // Pill a la izquierda del ancla (sin clamp). translate(-100%) lo coloca a la izq.
-      el.style.left=(x-8)+'px'; el.style.top=(y+28)+'px';
+      // Cambiar de lado si no cabe, sin fijar etiquetas cuya vela sale de pantalla.
+      const placeRight = x - 8 < el.offsetWidth;
+      el.style.transform = placeRight ? 'translate(0,-50%)' : 'translate(-100%,-50%)';
+      el.style.left=(placeRight ? x+8 : x-8)+'px'; el.style.top=(y+28)+'px';
       if (z._dot) {
         z._dot.style.display='block';
         z._dot.style.left=x+'px'; z._dot.style.top=y+'px';
